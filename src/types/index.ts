@@ -137,6 +137,31 @@ export interface AppSettings {
   sidebarCollapsed: boolean
 }
 
+export type PipelineStatus = 'cold' | 'pitched' | 'deck_shared' | 'pricing' | 'negotiating' | 'approved' | 'declined' | 'on_hold'
+
+export interface PipelineDeal {
+  id: string
+  clientName: string
+  internalPOC: string
+  clientPOC: string
+  status: PipelineStatus
+  notes: string
+  value?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const PIPELINE_STATUSES: { value: PipelineStatus; label: string; color: string; bg: string }[] = [
+  { value: 'cold',       label: 'Cold',        color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' },
+  { value: 'pitched',    label: 'Pitched',      color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+  { value: 'deck_shared',label: 'Deck Shared',  color: '#a78bfa', bg: 'rgba(167,139,250,0.15)' },
+  { value: 'pricing',    label: 'Pricing',      color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' },
+  { value: 'negotiating',label: 'Negotiating',  color: '#fb923c', bg: 'rgba(251,146,60,0.15)' },
+  { value: 'approved',   label: 'Approved',     color: '#4ade80', bg: 'rgba(74,222,128,0.15)' },
+  { value: 'declined',   label: 'Declined',     color: '#f87171', bg: 'rgba(248,113,113,0.15)' },
+  { value: 'on_hold',    label: 'On Hold',      color: '#e2e8f0', bg: 'rgba(226,232,240,0.10)' },
+]
+
 export const PROJECT_COLORS = [
   '#6366f1', // indigo
   '#8b5cf6', // violet

@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import type {
   Project, AnyItem, AppSettings, DailyBriefing, CalendarEvent,
   SectionType, TodoItem, TaskItem, FollowUpItem, ConversationItem,
-  IdeaItem, ManagementItem, MeetingItem, NoteItem
+  IdeaItem, ManagementItem, MeetingItem, NoteItem, PipelineDeal
 } from '../types'
 import { PROJECT_COLORS } from '../types'
 
@@ -29,6 +29,8 @@ interface StoreState {
   isCalendarOpen: boolean
   isMoveModalOpen: boolean
   moveItemId: string | null
+  pipeline: PipelineDeal[]
+  isPipelineOpen: boolean
 
   // Project actions
   addProject: (name: string, color?: string, icon?: string, description?: string) => Project
@@ -64,6 +66,12 @@ interface StoreState {
   setBriefingOpen: (open: boolean) => void
   setCalendarOpen: (open: boolean) => void
   setMoveModal: (open: boolean, itemId?: string | null) => void
+
+  // Pipeline
+  addDeal: (deal: Partial<PipelineDeal>) => PipelineDeal
+  updateDeal: (id: string, updates: Partial<PipelineDeal>) => void
+  deleteDeal: (id: string) => void
+  setPipelineOpen: (open: boolean) => void
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -210,6 +218,8 @@ export const useStore = create<StoreState>()(
       isCalendarOpen: false,
       isMoveModalOpen: false,
       moveItemId: null,
+      pipeline: [],
+      isPipelineOpen: false,
 
       addProject: (name, color, icon = '📁', description = '') => {
         const usedColors = get().projects.map(p => p.color)
@@ -303,6 +313,33 @@ export const useStore = create<StoreState>()(
       setBriefingOpen: (open) => set({ isBriefingOpen: open }),
       setCalendarOpen: (open) => set({ isCalendarOpen: open }),
       setMoveModal: (open, itemId = null) => set({ isMoveModalOpen: open, moveItemId: itemId }),
+
+      addDeal: (deal) => {
+        const newDeal: PipelineDeal = {
+          id: genId(),
+          clientName: '',
+          internalPOC: '',
+          clientPOC: '',
+          status: 'cold',
+          notes: '',
+          value: '',
+          createdAt: now(),
+          updatedAt: now(),
+          ...deal,
+        }
+        set(s => ({ pipeline: [...s.pipeline, newDeal] }))
+        return newDeal
+      },
+
+      updateDeal: (id, updates) =>
+        set(s => ({
+          pipeline: s.pipeline.map(d => d.id === id ? { ...d, ...updates, updatedAt: now() } : d)
+        })),
+
+      deleteDeal: (id) =>
+        set(s => ({ pipeline: s.pipeline.filter(d => d.id !== id) })),
+
+      setPipelineOpen: (open) => set({ isPipelineOpen: open }),
     }),
     {
       name: 'workspace-storage',
@@ -313,6 +350,7 @@ export const useStore = create<StoreState>()(
         briefings: state.briefings,
         activeProjectId: state.activeProjectId,
         activeSection: state.activeSection,
+        pipeline: state.pipeline,
       }),
     }
   )

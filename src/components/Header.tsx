@@ -1,5 +1,5 @@
 import { useStore } from '../store/useStore'
-import { Search, Zap, Calendar, Settings, Moon, Sun, Sparkles, Star } from './icons'
+import { Search, Zap, Calendar, Settings, Moon, Sun, Sparkles, Star, TrendingUp } from './icons'
 import { useEffect, useState } from 'react'
 import SettingsPanel from './SettingsPanel'
 import StarredItemsPanel from './StarredItemsPanel'
@@ -7,7 +7,7 @@ import { initAI } from '../utils/ai'
 import { format } from 'date-fns'
 
 export default function Header() {
-  const { setSearchOpen, setBriefingOpen, setCalendarOpen, settings, updateSettings, items } = useStore()
+  const { setSearchOpen, setBriefingOpen, setCalendarOpen, setPipelineOpen, settings, updateSettings, items, pipeline } = useStore()
   const [showSettings, setShowSettings] = useState(false)
   const [showStarred, setShowStarred] = useState(false)
 
@@ -64,6 +64,17 @@ export default function Header() {
           >
             <Star size={13} fill="currentColor" />
             {starred > 0 && <span>{starred}</span>}
+          </button>
+
+          <button
+            onClick={() => setPipelineOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl transition-colors"
+          >
+            <TrendingUp size={13} />
+            <span>Pipeline</span>
+            {pipeline.length > 0 && (
+              <span className="bg-emerald-500/20 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded-full font-medium">{pipeline.length}</span>
+            )}
           </button>
 
           <button

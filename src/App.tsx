@@ -7,6 +7,7 @@ import DailyBriefing from './components/DailyBriefing'
 import CalendarPanel from './components/CalendarPanel'
 import MoveItemModal from './components/modals/MoveItemModal'
 import ReminderNotifications from './components/ReminderNotifications'
+import SalesPipeline from './components/SalesPipeline'
 import TodoSection from './components/sections/TodoSection'
 import TaskSection from './components/sections/TaskSection'
 import FollowUpSection from './components/sections/FollowUpSection'
@@ -64,6 +65,7 @@ export default function App() {
       <CalendarPanel />
       <MoveItemModal />
       <ReminderNotifications />
+      <SalesPipeline />
     </div>
   )
 }
