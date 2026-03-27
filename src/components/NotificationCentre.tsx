@@ -93,8 +93,8 @@ export default function NotificationCentre({ onClose }: Props) {
   return (
     <div
       ref={panelRef}
-      className="absolute right-0 top-full mt-2 w-[380px] bg-gray-900 border border-white/15 rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden flex flex-col animate-slide-in"
-      style={{ maxHeight: 'min(560px, calc(100vh - 80px))' }}
+      className="fixed right-4 w-[380px] bg-gray-900 border border-white/15 rounded-2xl shadow-2xl shadow-black/50 z-[200] overflow-hidden flex flex-col animate-slide-in"
+      style={{ top: '56px', maxHeight: 'calc(100vh - 68px)' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">

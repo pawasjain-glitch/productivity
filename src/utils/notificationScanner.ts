@@ -28,11 +28,13 @@ export function typeToSection(type: string): SectionType {
   return map[type] || 'todos'
 }
 
-function bucket(mins: number, isOverdue: boolean): TimeBucket {
+// Use date-based checks so a task due "tomorrow at 10am" checked at 3pm today
+// correctly lands in 'tomorrow', not 'today' (which minute-counting would give).
+function getBucket(due: Date, mins: number, isOverdue: boolean): TimeBucket {
   if (isOverdue) return 'overdue'
   if (mins >= 0 && mins <= 15) return 'now'
-  if (mins <= 24 * 60) return 'today'
-  if (mins <= 48 * 60) return 'tomorrow'
+  if (isToday(due)) return 'today'
+  if (isTomorrow(due)) return 'tomorrow'
   return 'week'
 }
 
@@ -71,7 +73,7 @@ export function scanAllNotifications(
             : isTomorrow(start) ? `Tomorrow · ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             : start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           minutesLeft: mins,
-          bucket: bucket(mins, overdue),
+          bucket: getBucket(start, mins, overdue),
           date: item.startTime,
         })
       }
@@ -111,7 +113,7 @@ export function scanAllNotifications(
               : isTomorrow(due) ? 'Due tomorrow'
               : `Due ${due.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}`,
             minutesLeft: mins,
-            bucket: bucket(mins, overdue),
+            bucket: getBucket(due, mins, overdue),
             date: item.dueDate,
           })
         }
@@ -138,7 +140,7 @@ export function scanAllNotifications(
             : isTomorrow(due) ? 'Due tomorrow'
             : `Due ${due.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}`,
           minutesLeft: mins,
-          bucket: bucket(mins, overdue),
+          bucket: getBucket(due, mins, overdue),
           date: item.dueDate,
         })
       }
@@ -162,7 +164,7 @@ export function scanAllNotifications(
             ? `Overdue — follow up with ${item.contact}`
             : `Follow up with ${item.contact} · ${isToday(due) ? 'today' : isTomorrow(due) ? 'tomorrow' : due.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}`,
           minutesLeft: mins,
-          bucket: bucket(mins, overdue),
+          bucket: getBucket(due, mins, overdue),
           date: item.dueDate,
         })
       }

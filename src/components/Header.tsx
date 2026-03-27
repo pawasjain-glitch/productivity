@@ -90,7 +90,7 @@ export default function Header() {
           </button>
 
           {/* Notification Centre bell */}
-          <div ref={notifRef} className="relative">
+          <div ref={notifRef}>
             <button
               onClick={() => setShowNotifications(v => !v)}
               className={`relative p-2 rounded-xl transition-colors ${
