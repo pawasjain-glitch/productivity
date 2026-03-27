@@ -67,6 +67,7 @@ export interface ManagementItem extends BaseItem {
   status: 'pending' | 'discussed' | 'actioned' | 'dropped'
   targetDate?: string
   outcome?: string
+  outcomeTaskId?: string   // ID of the auto-created Task when outcome was recorded
 }
 
 export interface MeetingItem extends BaseItem {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../../store/useStore'
 import type { ManagementItem, Priority } from '../../types'
-import { Plus, Trash2, Move, Users, Flag, Clock, Check } from '../icons'
+import { Plus, Trash2, Move, Flag, Clock, Check, Briefcase } from '../icons'
 import { format, parseISO } from 'date-fns'
 
 const STATUS_STYLES: Record<ManagementItem['status'], string> = {
@@ -23,6 +23,7 @@ export default function ManagementSection() {
   const [showForm, setShowForm] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [outcomeText, setOutcomeText] = useState<Record<string, string>>({})
+  const [taskCreated, setTaskCreated] = useState<Record<string, boolean>>({})
   const [form, setForm] = useState({
     title: '', description: '', priority: 'medium' as Priority, targetDate: ''
   })
@@ -195,21 +196,74 @@ export default function ManagementSection() {
 
                 {/* Outcome */}
                 {item.status === 'discussed' || item.status === 'actioned' ? (
-                  <div className="flex gap-2">
-                    <input
-                      placeholder="Record the outcome..."
-                      value={outcomeText[item.id] ?? (item.outcome || '')}
-                      onChange={e => setOutcomeText(t => ({ ...t, [item.id]: e.target.value }))}
-                      className="flex-1 bg-white/5 text-gray-300 placeholder-gray-600 text-xs rounded-lg px-3 py-1.5 focus:outline-none border border-white/10"
-                    />
-                    <button
-                      onClick={() => {
-                        updateItem(item.id, { outcome: outcomeText[item.id] } as Partial<ManagementItem>)
-                      }}
-                      className="p-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
-                    >
-                      <Check size={13} className="text-white" />
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        placeholder="Record the outcome / action decided..."
+                        value={outcomeText[item.id] ?? (item.outcome || '')}
+                        onChange={e => setOutcomeText(t => ({ ...t, [item.id]: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur()
+                          }
+                        }}
+                        className="flex-1 bg-white/5 text-gray-300 placeholder-gray-600 text-xs rounded-lg px-3 py-1.5 focus:outline-none border border-white/10 focus:border-indigo-500/50"
+                      />
+                      <button
+                        onClick={() => {
+                          const outcome = outcomeText[item.id]?.trim()
+                          if (!outcome) return
+
+                          if (item.outcomeTaskId) {
+                            // Update existing task title to reflect new outcome
+                            updateItem(item.outcomeTaskId, {
+                              title: `[From Management] ${outcome}`,
+                              description: `Outcome of: "${item.title}"`,
+                            } as Parameters<typeof updateItem>[1])
+                            updateItem(item.id, { outcome } as Partial<ManagementItem>)
+                          } else {
+                            // First time: create a new Task in the same project
+                            const newTask = addItem({
+                              type: 'task',
+                              title: `[From Management] ${outcome}`,
+                              description: `Outcome of management discussion: "${item.title}"`,
+                              status: 'todo',
+                              priority: item.priority,
+                              progress: 0,
+                              projectIds: item.projectIds,
+                              tags: ['from-management'],
+                              isStarred: false,
+                            })
+                            updateItem(item.id, {
+                              outcome,
+                              outcomeTaskId: newTask.id,
+                            } as Partial<ManagementItem>)
+                          }
+
+                          setTaskCreated(t => ({ ...t, [item.id]: true }))
+                          setTimeout(() => setTaskCreated(t => ({ ...t, [item.id]: false })), 3000)
+                        }}
+                        className="p-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex-shrink-0"
+                        title="Save outcome & create task"
+                      >
+                        <Check size={13} className="text-white" />
+                      </button>
+                    </div>
+                    {/* Task created confirmation */}
+                    {taskCreated[item.id] && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 animate-slide-in">
+                        <Briefcase size={11} />
+                        {item.outcomeTaskId
+                          ? 'Task updated in Tasks section'
+                          : 'Task created in Tasks section'}
+                      </div>
+                    )}
+                    {item.outcomeTaskId && !taskCreated[item.id] && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                        <Briefcase size={10} />
+                        Linked to a task in this project
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>
