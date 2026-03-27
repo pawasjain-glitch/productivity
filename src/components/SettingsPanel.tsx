@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { X, Settings, Eye, EyeOff, Globe, Sparkles, Check } from './icons'
 import { initAI } from '../utils/ai'
+import { initGoogleAuth } from '../utils/calendar'
 
 interface SettingsPanelProps {
   onClose: () => void
@@ -12,6 +13,8 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [showKey, setShowKey] = useState(false)
   const [apiKey, setApiKey] = useState(settings.anthropicApiKey)
   const [saved, setSaved] = useState(false)
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const [calendarError, setCalendarError] = useState('')
 
   const handleSaveKey = () => {
     updateSettings({ anthropicApiKey: apiKey })
@@ -98,17 +101,30 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 <div>
                   <p className="text-xs font-medium text-gray-300">Calendar Integration</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {settings.googleCalendarConnected ? 'Connected' : 'Demo mode (showing sample events)'}
+                    {settings.googleCalendarConnected ? 'Connected ✓' : 'Demo mode (showing sample events)'}
                   </p>
+                  {calendarError && <p className="text-xs text-rose-400 mt-1">{calendarError}</p>}
                 </div>
                 <button
-                  onClick={() => {
-                    // In real app, trigger OAuth flow
-                    alert('To connect Google Calendar:\n\n1. Add VITE_GOOGLE_CLIENT_ID to your .env file\n2. Set up OAuth in Google Cloud Console\n3. Restart the app\n\nFor now, demo events are shown.')
+                  onClick={async () => {
+                    if (settings.googleCalendarConnected) {
+                      updateSettings({ googleCalendarConnected: false, googleAccessToken: '' })
+                      return
+                    }
+                    setCalendarError('')
+                    setCalendarLoading(true)
+                    try {
+                      const token = await initGoogleAuth()
+                      updateSettings({ googleCalendarConnected: true, googleAccessToken: token })
+                    } catch (e) {
+                      setCalendarError((e as Error).message || 'Connection failed')
+                    }
+                    setCalendarLoading(false)
                   }}
-                  className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 text-xs rounded-lg transition-colors"
+                  disabled={calendarLoading}
+                  className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 text-xs rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {settings.googleCalendarConnected ? 'Disconnect' : 'Connect'}
+                  {calendarLoading ? 'Connecting…' : settings.googleCalendarConnected ? 'Disconnect' : 'Connect'}
                 </button>
               </div>
             </div>

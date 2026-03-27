@@ -2,12 +2,14 @@ import { useStore } from '../store/useStore'
 import { Search, Zap, Calendar, Settings, Moon, Sun, Sparkles, Star } from './icons'
 import { useEffect, useState } from 'react'
 import SettingsPanel from './SettingsPanel'
+import StarredItemsPanel from './StarredItemsPanel'
 import { initAI } from '../utils/ai'
 import { format } from 'date-fns'
 
 export default function Header() {
   const { setSearchOpen, setBriefingOpen, setCalendarOpen, settings, updateSettings, items } = useStore()
   const [showSettings, setShowSettings] = useState(false)
+  const [showStarred, setShowStarred] = useState(false)
 
   useEffect(() => {
     if (settings.anthropicApiKey) initAI(settings.anthropicApiKey)
@@ -51,12 +53,18 @@ export default function Header() {
 
         {/* Right actions */}
         <div className="flex items-center gap-1">
-          {starred > 0 && (
-            <button className="flex items-center gap-1 px-2 py-1.5 text-amber-400/80 hover:text-amber-400 text-xs rounded-lg hover:bg-amber-500/10 transition-colors">
-              <Star size={13} fill="currentColor" />
-              <span>{starred}</span>
-            </button>
-          )}
+          <button
+            onClick={() => setShowStarred(v => !v)}
+            className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg transition-colors ${
+              showStarred
+                ? 'text-amber-400 bg-amber-500/15'
+                : 'text-amber-400/80 hover:text-amber-400 hover:bg-amber-500/10'
+            }`}
+            title="Starred items"
+          >
+            <Star size={13} fill="currentColor" />
+            {starred > 0 && <span>{starred}</span>}
+          </button>
 
           <button
             onClick={() => setBriefingOpen(true)}
@@ -93,6 +101,7 @@ export default function Header() {
       </header>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showStarred && <StarredItemsPanel onClose={() => setShowStarred(false)} />}
     </>
   )
 }
