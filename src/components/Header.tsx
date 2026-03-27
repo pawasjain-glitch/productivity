@@ -1,8 +1,9 @@
 import { useStore } from '../store/useStore'
-import { Search, Zap, Calendar, Settings, Moon, Sun, Sparkles, Star, TrendingUp } from './icons'
-import { useEffect, useState } from 'react'
+import { Search, Zap, Calendar, Settings, Moon, Sun, Star, TrendingUp, Bell } from './icons'
+import { useEffect, useRef, useState } from 'react'
 import SettingsPanel from './SettingsPanel'
 import StarredItemsPanel from './StarredItemsPanel'
+import NotificationCentre, { useNotificationCount } from './NotificationCentre'
 import { initAI } from '../utils/ai'
 import { format } from 'date-fns'
 
@@ -10,6 +11,9 @@ export default function Header() {
   const { setSearchOpen, setBriefingOpen, setCalendarOpen, setPipelineOpen, settings, updateSettings, items, pipeline } = useStore()
   const [showSettings, setShowSettings] = useState(false)
   const [showStarred, setShowStarred] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const notifCount = useNotificationCount()
+  const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (settings.anthropicApiKey) initAI(settings.anthropicApiKey)
@@ -84,6 +88,29 @@ export default function Header() {
             <Zap size={13} />
             <span>Daily Briefing</span>
           </button>
+
+          {/* Notification Centre bell */}
+          <div ref={notifRef} className="relative">
+            <button
+              onClick={() => setShowNotifications(v => !v)}
+              className={`relative p-2 rounded-xl transition-colors ${
+                showNotifications
+                  ? 'text-indigo-400 bg-indigo-500/15'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/10'
+              }`}
+              title="Notification Centre"
+            >
+              <Bell size={16} />
+              {notifCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-indigo-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 shadow-lg shadow-indigo-500/40">
+                  {notifCount > 99 ? '99+' : notifCount}
+                </span>
+              )}
+            </button>
+            {showNotifications && (
+              <NotificationCentre onClose={() => setShowNotifications(false)} />
+            )}
+          </div>
 
           <button
             onClick={() => setCalendarOpen(true)}
