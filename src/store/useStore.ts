@@ -31,6 +31,7 @@ interface StoreState {
   moveItemId: string | null
   pipeline: PipelineDeal[]
   isPipelineOpen: boolean
+  isMasterView: boolean
 
   // Project actions
   addProject: (name: string, color?: string, icon?: string, description?: string) => Project
@@ -72,6 +73,7 @@ interface StoreState {
   updateDeal: (id: string, updates: Partial<PipelineDeal>) => void
   deleteDeal: (id: string) => void
   setPipelineOpen: (open: boolean) => void
+  setMasterView: (v: boolean) => void
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -220,6 +222,7 @@ export const useStore = create<StoreState>()(
       moveItemId: null,
       pipeline: [],
       isPipelineOpen: false,
+      isMasterView: false,
 
       addProject: (name, color, icon = '📁', description = '') => {
         const usedColors = get().projects.map(p => p.color)
@@ -340,6 +343,7 @@ export const useStore = create<StoreState>()(
         set(s => ({ pipeline: s.pipeline.filter(d => d.id !== id) })),
 
       setPipelineOpen: (open) => set({ isPipelineOpen: open }),
+      setMasterView: (v) => set({ isMasterView: v }),
     }),
     {
       name: 'workspace-storage',

@@ -8,6 +8,7 @@ import CalendarPanel from './components/CalendarPanel'
 import MoveItemModal from './components/modals/MoveItemModal'
 import ReminderNotifications from './components/ReminderNotifications'
 import SalesPipeline from './components/SalesPipeline'
+import MasterView from './components/MasterView'
 import TodoSection from './components/sections/TodoSection'
 import TaskSection from './components/sections/TaskSection'
 import FollowUpSection from './components/sections/FollowUpSection'
@@ -19,7 +20,9 @@ import NoteSection from './components/sections/NoteSection'
 import OverviewSection from './components/sections/OverviewSection'
 
 function SectionContent() {
-  const { activeSection, activeProjectId } = useStore()
+  const { activeSection, activeProjectId, isMasterView } = useStore()
+
+  if (isMasterView) return <MasterView />
 
   if (!activeProjectId) {
     return (
@@ -47,17 +50,24 @@ function SectionContent() {
   }
 }
 
+function AppLayout() {
+  const { isMasterView } = useStore()
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {!isMasterView && <SectionNav />}
+      <main className="flex-1 overflow-hidden flex flex-col">
+        <SectionContent />
+      </main>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden">
       <Header />
       <ProjectTabs />
-      <div className="flex flex-1 overflow-hidden">
-        <SectionNav />
-        <main className="flex-1 overflow-hidden flex flex-col">
-          <SectionContent />
-        </main>
-      </div>
+      <AppLayout />
 
       {/* Overlays */}
       <GlobalSearch />

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { Plus, X, Check, Edit3, FolderPlus } from './icons'
+import { Plus, X, Check, FolderPlus, LayoutDashboard } from './icons'
 import { PROJECT_COLORS } from '../types'
 
 export default function ProjectTabs() {
-  const { projects, activeProjectId, setActiveProject, addProject, updateProject, deleteProject } = useStore()
+  const { projects, activeProjectId, setActiveProject, addProject, updateProject, deleteProject, isMasterView, setMasterView } = useStore()
   const [isAdding, setIsAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState(PROJECT_COLORS[0])
@@ -40,6 +40,23 @@ export default function ProjectTabs() {
   return (
     <div className="border-b border-white/10 bg-gray-900/60 backdrop-blur-sm">
       <div className="flex items-center gap-1 px-4 overflow-x-auto scrollbar-hide">
+        {/* Master tab — always pinned first */}
+        <button
+          onClick={() => { setMasterView(true); setActiveProject(null) }}
+          className={`flex items-center gap-1.5 px-4 py-3 text-sm font-semibold transition-all relative whitespace-nowrap flex-shrink-0 ${
+            isMasterView
+              ? 'text-white'
+              : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <LayoutDashboard size={13} />
+          <span>Master</span>
+          {isMasterView && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-indigo-400" />
+          )}
+        </button>
+        <div className="w-px h-5 bg-white/10 flex-shrink-0 mx-1" />
+
         {sortedProjects.map(project => (
           <div key={project.id} className="flex-shrink-0 group relative">
             {editingId === project.id ? (
@@ -57,7 +74,7 @@ export default function ProjectTabs() {
               </div>
             ) : (
               <button
-                onClick={() => setActiveProject(project.id)}
+                onClick={() => { setActiveProject(project.id); setMasterView(false) }}
                 onDoubleClick={() => handleEditStart(project.id, project.name)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all relative whitespace-nowrap ${
                   activeProjectId === project.id
