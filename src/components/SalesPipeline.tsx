@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store/useStore'
-import { X, Plus, Trash2, Search, TrendingUp } from './icons'
+import { X, Plus, Trash2, Search, TrendingUp, Bell, CheckCircle2 } from './icons'
 import type { PipelineDeal, PipelineStatus } from '../types'
 import { PIPELINE_STATUSES } from '../types'
+import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns'
 
 const STATUS_MAP = Object.fromEntries(PIPELINE_STATUSES.map(s => [s.value, s]))
+
+/* ─── Status Badge ───────────────────────────────────────────── */
 
 function StatusBadge({ status, onChange }: { status: PipelineStatus; onChange: (s: PipelineStatus) => void }) {
   const [open, setOpen] = useState(false)
@@ -48,6 +51,8 @@ function StatusBadge({ status, onChange }: { status: PipelineStatus; onChange: (
     </div>
   )
 }
+
+/* ─── Editable Cell ──────────────────────────────────────────── */
 
 function EditableCell({
   value, placeholder, onChange, multiline = false, className = ''
@@ -94,13 +99,162 @@ function EditableCell({
   )
 }
 
+/* ─── Follow-up Date Cell ────────────────────────────────────── */
+
+function FollowUpCell({ deal, onDateChange }: {
+  deal: PipelineDeal
+  onDateChange: (date: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const date = deal.nextFollowUpDate ? parseISO(deal.nextFollowUpDate) : null
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Label & colour based on urgency
+  let label = ''
+  let labelClass = 'text-gray-500'
+  let dotClass = ''
+
+  if (date) {
+    if (isPast(date) && !isToday(date)) {
+      label = `Overdue · ${format(date, 'MMM d')}`
+      labelClass = 'text-red-400'
+      dotClass = 'bg-red-400'
+    } else if (isToday(date)) {
+      label = 'Today'
+      labelClass = 'text-amber-400'
+      dotClass = 'bg-amber-400'
+    } else if (isTomorrow(date)) {
+      label = 'Tomorrow'
+      labelClass = 'text-blue-400'
+      dotClass = 'bg-blue-400'
+    } else {
+      label = format(date, 'MMM d, yyyy')
+      labelClass = 'text-emerald-400'
+      dotClass = 'bg-emerald-400'
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative px-2 py-1">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity ${date ? labelClass : 'text-gray-600 hover:text-gray-400'}`}
+      >
+        {date ? (
+          <>
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
+            <Bell size={11} className="flex-shrink-0" />
+            <span className="font-medium">{label}</span>
+          </>
+        ) : (
+          <>
+            <Bell size={11} />
+            <span className="italic">Set follow-up...</span>
+          </>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-gray-900 border border-white/15 rounded-xl shadow-2xl p-3 min-w-[220px]">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 font-semibold">Next Follow-up Date</p>
+          <input
+            type="date"
+            defaultValue={deal.nextFollowUpDate?.slice(0, 10) || ''}
+            min={new Date().toISOString().slice(0, 10)}
+            className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50 mb-3"
+            onChange={e => {
+              if (e.target.value) {
+                onDateChange(e.target.value)
+                setOpen(false)
+              }
+            }}
+          />
+          {date && (
+            <button
+              onClick={() => { onDateChange(null); setOpen(false) }}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+            >
+              <X size={11} />
+              Remove follow-up
+            </button>
+          )}
+          {date && deal.followUpItemId && (
+            <p className="text-[10px] text-gray-600 text-center mt-2 flex items-center justify-center gap-1">
+              <CheckCircle2 size={10} className="text-emerald-500" />
+              Synced to WLDD Core follow-ups
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── Main Component ─────────────────────────────────────────── */
+
 export default function SalesPipeline() {
-  const { isPipelineOpen, setPipelineOpen, pipeline, addDeal, updateDeal, deleteDeal } = useStore()
+  const { isPipelineOpen, setPipelineOpen, pipeline, addDeal, updateDeal, deleteDeal, projects, addItem, updateItem, deleteItem } = useStore()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<PipelineStatus | 'all'>('all')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   if (!isPipelineOpen) return null
+
+  // Find "WLDD Core" project, fall back to first project
+  const targetProject = projects.find(p => p.name.toLowerCase().includes('wldd') && p.name.toLowerCase().includes('core'))
+    || projects.find(p => !p.isArchived)
+
+  const handleFollowUpDate = (deal: PipelineDeal, date: string | null) => {
+    if (!date) {
+      // Remove: delete linked followup item and clear from deal
+      if (deal.followUpItemId) {
+        deleteItem(deal.followUpItemId)
+      }
+      updateDeal(deal.id, { nextFollowUpDate: undefined, followUpItemId: undefined })
+      return
+    }
+
+    const isoDate = `${date}T09:00:00.000Z` // 9am on that date
+
+    if (deal.followUpItemId) {
+      // Update existing followup item's dueDate
+      updateItem(deal.followUpItemId, { dueDate: date } as Parameters<typeof updateItem>[1])
+      updateDeal(deal.id, { nextFollowUpDate: date })
+    } else {
+      // Create new FollowUpItem in WLDD Core (or first project)
+      if (!targetProject) return
+      const newItem = addItem({
+        type: 'followup',
+        title: `Follow up with ${deal.clientName || 'client'} (Pipeline)`,
+        contact: deal.clientPOC || deal.clientName || 'Client',
+        description: `Pipeline follow-up · ${deal.internalPOC ? `Internal: ${deal.internalPOC} · ` : ''}Status: ${STATUS_MAP[deal.status]?.label}${deal.notes ? ` · Notes: ${deal.notes}` : ''}`,
+        dueDate: date,
+        status: 'pending',
+        channel: 'other',
+        projectIds: [targetProject.id],
+        tags: ['pipeline', 'sales'],
+        isStarred: false,
+      })
+      updateDeal(deal.id, { nextFollowUpDate: date, followUpItemId: newItem.id })
+    }
+  }
+
+  const handleDeleteDeal = (deal: PipelineDeal) => {
+    // Also remove the linked followup item if it exists
+    if (deal.followUpItemId) {
+      deleteItem(deal.followUpItemId)
+    }
+    deleteDeal(deal.id)
+    setConfirmDelete(null)
+  }
 
   const filtered = pipeline.filter(d => {
     const q = search.toLowerCase()
@@ -114,9 +268,7 @@ export default function SalesPipeline() {
     return acc
   }, {})
 
-  const handleAdd = () => {
-    addDeal({ status: 'cold' })
-  }
+  const handleAdd = () => addDeal({ status: 'cold' })
 
   const col = 'px-3 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider'
 
@@ -132,12 +284,14 @@ export default function SalesPipeline() {
             </div>
             <div>
               <h2 className="text-white font-bold text-base">Sales Pipeline</h2>
-              <p className="text-xs text-gray-500">{pipeline.length} client{pipeline.length !== 1 ? 's' : ''} tracked</p>
+              <p className="text-xs text-gray-500">
+                {pipeline.length} client{pipeline.length !== 1 ? 's' : ''}
+                {targetProject && <span className="ml-2 text-emerald-600">· Follow-ups sync to {targetProject.name}</span>}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Search */}
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input
@@ -148,7 +302,6 @@ export default function SalesPipeline() {
               />
             </div>
 
-            {/* Status filter */}
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value as PipelineStatus | 'all')}
@@ -229,6 +382,12 @@ export default function SalesPipeline() {
                   <th className={`${col} min-w-[140px]`}>Client POC</th>
                   <th className={`${col} min-w-[140px]`}>Status</th>
                   <th className={`${col} min-w-[120px]`}>Deal Value</th>
+                  <th className={`${col} min-w-[160px]`}>
+                    <div className="flex items-center gap-1.5">
+                      <Bell size={11} />
+                      Next Follow-up
+                    </div>
+                  </th>
                   <th className={`${col} flex-1`}>Notes</th>
                   <th className={`${col} w-12`}></th>
                 </tr>
@@ -239,10 +398,8 @@ export default function SalesPipeline() {
                     key={deal.id}
                     className="border-b border-white/5 hover:bg-white/[0.02] group transition-colors"
                   >
-                    {/* Row number */}
                     <td className="px-3 py-2 text-xs text-gray-600 text-center">{idx + 1}</td>
 
-                    {/* Client Name */}
                     <td className="px-1 py-1">
                       <EditableCell
                         value={deal.clientName}
@@ -252,7 +409,6 @@ export default function SalesPipeline() {
                       />
                     </td>
 
-                    {/* Internal POC */}
                     <td className="px-1 py-1">
                       <EditableCell
                         value={deal.internalPOC}
@@ -261,7 +417,6 @@ export default function SalesPipeline() {
                       />
                     </td>
 
-                    {/* Client POC */}
                     <td className="px-1 py-1">
                       <EditableCell
                         value={deal.clientPOC}
@@ -270,7 +425,6 @@ export default function SalesPipeline() {
                       />
                     </td>
 
-                    {/* Status */}
                     <td className="px-3 py-2">
                       <StatusBadge
                         status={deal.status}
@@ -278,7 +432,6 @@ export default function SalesPipeline() {
                       />
                     </td>
 
-                    {/* Deal Value */}
                     <td className="px-1 py-1">
                       <EditableCell
                         value={deal.value || ''}
@@ -287,8 +440,15 @@ export default function SalesPipeline() {
                       />
                     </td>
 
-                    {/* Notes */}
-                    <td className="px-1 py-1 max-w-[320px]">
+                    {/* Follow-up Date */}
+                    <td className="py-1">
+                      <FollowUpCell
+                        deal={deal}
+                        onDateChange={date => handleFollowUpDate(deal, date)}
+                      />
+                    </td>
+
+                    <td className="px-1 py-1 max-w-[280px]">
                       <EditableCell
                         value={deal.notes}
                         placeholder="Add notes..."
@@ -297,12 +457,11 @@ export default function SalesPipeline() {
                       />
                     </td>
 
-                    {/* Delete */}
                     <td className="px-3 py-2">
                       {confirmDelete === deal.id ? (
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => { deleteDeal(deal.id); setConfirmDelete(null) }}
+                            onClick={() => handleDeleteDeal(deal)}
                             className="text-[10px] text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
                           >
                             Delete
@@ -329,7 +488,6 @@ export default function SalesPipeline() {
             </table>
           )}
 
-          {/* Add row inline at the bottom */}
           {pipeline.length > 0 && (
             <button
               onClick={handleAdd}

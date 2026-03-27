@@ -147,6 +147,8 @@ export interface PipelineDeal {
   status: PipelineStatus
   notes: string
   value?: string
+  nextFollowUpDate?: string   // ISO date string e.g. "2024-04-15"
+  followUpItemId?: string     // ID of the linked FollowUpItem in the workspace
   createdAt: string
   updatedAt: string
 }
