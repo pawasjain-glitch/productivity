@@ -17,6 +17,7 @@ export interface TodoItem extends BaseItem {
   completed: boolean
   dueDate?: string
   priority: Priority
+  assignee?: string
 }
 
 export interface TaskItem extends BaseItem {
@@ -26,7 +27,6 @@ export interface TaskItem extends BaseItem {
   status: Status
   priority: Priority
   dueDate?: string
-  assignee?: string
   progress: number // 0-100
 }
 

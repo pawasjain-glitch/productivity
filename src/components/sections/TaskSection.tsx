@@ -31,7 +31,7 @@ export default function TaskSection() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: '', description: '', priority: 'medium' as Priority,
-    status: 'todo' as Status, dueDate: '', assignee: '', progress: 0
+    status: 'todo' as Status, dueDate: '', progress: 0
   })
 
   const tasks = items
@@ -51,13 +51,12 @@ export default function TaskSection() {
       priority: form.priority,
       status: form.status,
       dueDate: form.dueDate || undefined,
-      assignee: form.assignee || undefined,
       progress: form.progress,
       projectIds: [activeProjectId],
       tags: [],
       isStarred: false,
     })
-    setForm({ title: '', description: '', priority: 'medium', status: 'todo', dueDate: '', assignee: '', progress: 0 })
+    setForm({ title: '', description: '', priority: 'medium', status: 'todo', dueDate: '', progress: 0 })
     setShowAddForm(false)
   }
 
@@ -134,12 +133,6 @@ export default function TaskSection() {
               onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
               className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none border border-white/10"
             />
-            <input
-              placeholder="Assignee..."
-              value={form.assignee}
-              onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))}
-              className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none border border-white/10 w-28"
-            />
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={handleAdd} className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg transition-colors">
@@ -190,9 +183,6 @@ export default function TaskSection() {
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{task.description}</p>
                 )}
                 <div className="flex items-center gap-3 mt-1.5">
-                  {task.assignee && (
-                    <span className="text-xs text-gray-500">👤 {task.assignee}</span>
-                  )}
                   {task.dueDate && (
                     <span className="flex items-center gap-1 text-xs text-gray-500">
                       <Clock size={10} />

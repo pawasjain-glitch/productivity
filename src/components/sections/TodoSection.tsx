@@ -23,6 +23,7 @@ export default function TodoSection() {
   const [newText, setNewText] = useState('')
   const [newPriority, setNewPriority] = useState<Priority>('medium')
   const [newDueDate, setNewDueDate] = useState('')
+  const [newAssignee, setNewAssignee] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all')
@@ -51,12 +52,14 @@ export default function TodoSection() {
       completed: false,
       priority: newPriority,
       dueDate: newDueDate || undefined,
+      assignee: newAssignee.trim() || undefined,
       projectIds: [activeProjectId],
       tags: [],
       isStarred: false,
     })
     setNewText('')
     setNewDueDate('')
+    setNewAssignee('')
     setShowAddForm(false)
   }
 
@@ -147,6 +150,12 @@ export default function TodoSection() {
               onChange={e => setNewDueDate(e.target.value)}
               className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1 focus:outline-none border border-white/10"
             />
+            <input
+              placeholder="Assign to..."
+              value={newAssignee}
+              onChange={e => setNewAssignee(e.target.value)}
+              className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1 focus:outline-none border border-white/10 w-28"
+            />
             <div className="ml-auto flex gap-1">
               <button onClick={handleAdd} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg transition-colors">
                 Add
@@ -226,6 +235,9 @@ export default function TodoSection() {
                 {todo.tags.map(tag => (
                   <span key={tag} className="text-xs text-gray-600">#{tag}</span>
                 ))}
+                {todo.assignee && (
+                  <span className="text-xs text-gray-500">👤 {todo.assignee}</span>
+                )}
               </div>
             </div>
 
