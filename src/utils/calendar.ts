@@ -4,14 +4,13 @@ const GOOGLE_CLIENT_ID = (import.meta as unknown as { env: Record<string, string
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 const REDIRECT_URI = window.location.origin + '/oauth-callback.html'
 
-function buildAuthUrl(prompt?: string): string {
+function buildAuthUrl(): string {
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI)
   authUrl.searchParams.set('response_type', 'token')
   authUrl.searchParams.set('scope', SCOPES)
   authUrl.searchParams.set('include_granted_scopes', 'true')
-  if (prompt) authUrl.searchParams.set('prompt', prompt)
   return authUrl.toString()
 }
 
@@ -74,18 +73,9 @@ function openAuthPopup(url: string): Promise<{ token: string; expiresAt: number 
 }
 
 export async function initGoogleAuth(): Promise<{ token: string; expiresAt: number }> {
-  // 1. Try silent re-auth first (no popup interaction if already logged in)
-  try {
-    const result = await openAuthPopup(buildAuthUrl('none'))
-    return result
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : ''
-    // If silent auth failed (needs consent / interaction), try with full consent screen
-    if (msg.startsWith('oauth-error:') || msg === 'Popup closed by user') {
-      return openAuthPopup(buildAuthUrl())
-    }
-    throw err
-  }
+  // Open a single popup with the full consent screen — no silent re-auth
+  // (silent re-auth with prompt:none opens a second popup which browsers block)
+  return openAuthPopup(buildAuthUrl())
 }
 
 export async function fetchCalendarEvents(accessToken: string): Promise<CalendarEvent[]> {
