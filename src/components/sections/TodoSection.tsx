@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../../store/useStore'
 import type { TodoItem, Priority } from '../../types'
-import { Plus, Star, Trash2, Edit3, Check, X, Flag, Clock, Move, Copy } from '../icons'
+import { Plus, Star, Trash2, Edit3, Check, X, Clock, Move } from '../icons'
 import { format, isAfter, parseISO } from 'date-fns'
 
 const PRIORITY_COLORS: Record<Priority, string> = {
@@ -18,6 +18,13 @@ const PRIORITY_BG: Record<Priority, string> = {
   urgent: 'bg-red-500/10 text-red-400',
 }
 
+interface EditState {
+  text: string
+  priority: Priority
+  dueDate: string
+  assignee: string
+}
+
 export default function TodoSection() {
   const { items, activeProjectId, addItem, updateItem, deleteItem, setMoveModal } = useStore()
   const [newText, setNewText] = useState('')
@@ -25,7 +32,7 @@ export default function TodoSection() {
   const [newDueDate, setNewDueDate] = useState('')
   const [newAssignee, setNewAssignee] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editText, setEditText] = useState('')
+  const [editState, setEditState] = useState<EditState>({ text: '', priority: 'medium', dueDate: '', assignee: '' })
   const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
 
@@ -63,8 +70,24 @@ export default function TodoSection() {
     setShowAddForm(false)
   }
 
+  const startEdit = (todo: TodoItem) => {
+    setEditingId(todo.id)
+    setEditState({
+      text: todo.text,
+      priority: todo.priority,
+      dueDate: todo.dueDate ? todo.dueDate.slice(0, 10) : '',
+      assignee: todo.assignee || '',
+    })
+  }
+
   const handleEditSave = (todo: TodoItem) => {
-    if (editText.trim()) updateItem(todo.id, { text: editText.trim() } as Partial<TodoItem>)
+    if (!editState.text.trim()) return
+    updateItem(todo.id, {
+      text: editState.text.trim(),
+      priority: editState.priority,
+      dueDate: editState.dueDate || undefined,
+      assignee: editState.assignee.trim() || undefined,
+    } as Partial<TodoItem>)
     setEditingId(null)
   }
 
@@ -82,7 +105,6 @@ export default function TodoSection() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Filter tabs */}
           <div className="flex bg-white/5 rounded-lg p-0.5 text-xs">
             {(['all', 'active', 'done'] as const).map(f => (
               <button
@@ -133,7 +155,7 @@ export default function TodoSection() {
             onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setShowAddForm(false) }}
             className="w-full bg-transparent text-white placeholder-gray-500 text-sm focus:outline-none mb-2"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <select
               value={newPriority}
               onChange={e => setNewPriority(e.target.value as Priority)}
@@ -181,93 +203,134 @@ export default function TodoSection() {
         ) : filtered.map(todo => (
           <div
             key={todo.id}
-            className={`group flex items-start gap-3 p-3 rounded-xl border transition-all hover:bg-white/5 ${
+            className={`group rounded-xl border transition-all ${
               todo.completed
                 ? 'border-white/5 opacity-60'
                 : isOverdue(todo)
                   ? 'border-red-500/20 bg-red-500/5'
-                  : 'border-white/10 bg-white/3'
+                  : 'border-white/10 bg-white/3 hover:bg-white/5'
             }`}
           >
-            {/* Checkbox */}
-            <button
-              onClick={() => updateItem(todo.id, { completed: !todo.completed } as Partial<TodoItem>)}
-              className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                todo.completed
-                  ? 'bg-indigo-500 border-indigo-500'
-                  : 'border-gray-600 hover:border-indigo-400'
-              }`}
-            >
-              {todo.completed && <Check size={10} className="text-white" />}
-            </button>
+            {/* Main row */}
+            <div className="flex items-start gap-3 p-3">
+              {/* Checkbox */}
+              <button
+                onClick={() => updateItem(todo.id, { completed: !todo.completed } as Partial<TodoItem>)}
+                className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                  todo.completed
+                    ? 'bg-indigo-500 border-indigo-500'
+                    : 'border-gray-600 hover:border-indigo-400'
+                }`}
+              >
+                {todo.completed && <Check size={10} className="text-white" />}
+              </button>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-              {editingId === todo.id ? (
-                <div className="flex gap-2">
-                  <input
-                    autoFocus
-                    value={editText}
-                    onChange={e => setEditText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleEditSave(todo); if (e.key === 'Escape') setEditingId(null) }}
-                    className="flex-1 bg-white/10 text-white text-sm px-2 py-0.5 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <button onClick={() => handleEditSave(todo)} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
-                  <button onClick={() => setEditingId(null)} className="text-gray-500 hover:text-gray-300"><X size={14} /></button>
-                </div>
-              ) : (
+              {/* Content */}
+              <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium ${todo.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
                   {todo.text}
                 </p>
-              )}
-
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${PRIORITY_BG[todo.priority]}`}>
-                  {todo.priority}
-                </span>
-                {todo.dueDate && (
-                  <span className={`flex items-center gap-1 text-xs ${isOverdue(todo) ? 'text-red-400' : 'text-gray-500'}`}>
-                    <Clock size={10} />
-                    {format(parseISO(todo.dueDate), 'MMM d')}
-                    {isOverdue(todo) && ' · Overdue'}
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${PRIORITY_BG[todo.priority]}`}>
+                    {todo.priority}
                   </span>
-                )}
-                {todo.tags.map(tag => (
-                  <span key={tag} className="text-xs text-gray-600">#{tag}</span>
-                ))}
-                {todo.assignee && (
-                  <span className="text-xs text-gray-500">👤 {todo.assignee}</span>
-                )}
+                  {todo.dueDate && (
+                    <span className={`flex items-center gap-1 text-xs ${isOverdue(todo) ? 'text-red-400' : 'text-gray-500'}`}>
+                      <Clock size={10} />
+                      {format(parseISO(todo.dueDate), 'MMM d')}
+                      {isOverdue(todo) && ' · Overdue'}
+                    </span>
+                  )}
+                  {todo.assignee && (
+                    <span className="text-xs text-gray-500">👤 {todo.assignee}</span>
+                  )}
+                  {todo.tags.map(tag => (
+                    <span key={tag} className="text-xs text-gray-600">#{tag}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button
+                  onClick={() => updateItem(todo.id, { isStarred: !todo.isStarred } as Partial<TodoItem>)}
+                  className={`p-1.5 rounded-lg hover:bg-white/10 transition-colors ${todo.isStarred ? 'text-amber-400' : 'text-gray-600'}`}
+                >
+                  <Star size={13} fill={todo.isStarred ? 'currentColor' : 'none'} />
+                </button>
+                <button
+                  onClick={() => editingId === todo.id ? setEditingId(null) : startEdit(todo)}
+                  className={`p-1.5 rounded-lg hover:bg-white/10 transition-colors ${editingId === todo.id ? 'text-indigo-400' : 'text-gray-600 hover:text-gray-300'}`}
+                  title="Edit"
+                >
+                  <Edit3 size={13} />
+                </button>
+                <button
+                  onClick={() => setMoveModal(true, todo.id)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-gray-600 hover:text-gray-300 transition-colors"
+                >
+                  <Move size={13} />
+                </button>
+                <button
+                  onClick={() => deleteItem(todo.id)}
+                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => updateItem(todo.id, { isStarred: !todo.isStarred } as Partial<TodoItem>)}
-                className={`p-1.5 rounded-lg hover:bg-white/10 transition-colors ${todo.isStarred ? 'text-amber-400' : 'text-gray-600'}`}
-              >
-                <Star size={13} fill={todo.isStarred ? 'currentColor' : 'none'} />
-              </button>
-              <button
-                onClick={() => { setEditingId(todo.id); setEditText(todo.text) }}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-gray-600 hover:text-gray-300 transition-colors"
-              >
-                <Edit3 size={13} />
-              </button>
-              <button
-                onClick={() => setMoveModal(true, todo.id)}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-gray-600 hover:text-gray-300 transition-colors"
-              >
-                <Move size={13} />
-              </button>
-              <button
-                onClick={() => deleteItem(todo.id)}
-                className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
+            {/* Expanded edit panel */}
+            {editingId === todo.id && (
+              <div className="px-3 pb-3 border-t border-white/5 pt-2.5 animate-slide-in space-y-2">
+                <input
+                  autoFocus
+                  value={editState.text}
+                  onChange={e => setEditState(s => ({ ...s, text: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleEditSave(todo); if (e.key === 'Escape') setEditingId(null) }}
+                  className="w-full bg-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none border border-white/10 focus:border-indigo-500/50"
+                  placeholder="To-do text..."
+                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={editState.priority}
+                    onChange={e => setEditState(s => ({ ...s, priority: e.target.value as Priority }))}
+                    className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none border border-white/10"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={editState.dueDate}
+                    onChange={e => setEditState(s => ({ ...s, dueDate: e.target.value }))}
+                    className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none border border-white/10"
+                  />
+                  <input
+                    placeholder="Assign to..."
+                    value={editState.assignee}
+                    onChange={e => setEditState(s => ({ ...s, assignee: e.target.value }))}
+                    className="bg-white/10 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none border border-white/10 w-32"
+                  />
+                  <div className="ml-auto flex gap-1">
+                    <button
+                      onClick={() => handleEditSave(todo)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg transition-colors"
+                    >
+                      <Check size={11} /> Save
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 text-xs rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
