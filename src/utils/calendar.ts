@@ -2,76 +2,90 @@ import type { CalendarEvent } from '../types'
 
 const GOOGLE_CLIENT_ID = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_GOOGLE_CLIENT_ID || ''
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
+const REDIRECT_URI = window.location.origin + '/oauth-callback.html'
 
-export function initGoogleAuth(): Promise<{ token: string; expiresAt: number }> {
+function buildAuthUrl(prompt?: string): string {
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
+  authUrl.searchParams.set('redirect_uri', REDIRECT_URI)
+  authUrl.searchParams.set('response_type', 'token')
+  authUrl.searchParams.set('scope', SCOPES)
+  authUrl.searchParams.set('include_granted_scopes', 'true')
+  if (prompt) authUrl.searchParams.set('prompt', prompt)
+  return authUrl.toString()
+}
+
+function parseTokenFromUrl(url: string): { token: string; expiresAt: number } | null {
+  try {
+    const hash = url.includes('#') ? url.split('#')[1] : ''
+    const params = new URLSearchParams(hash)
+    const token = params.get('access_token')
+    if (!token) return null
+    const expiresIn = parseInt(params.get('expires_in') || '3600', 10)
+    const expiresAt = Date.now() + (expiresIn - 60) * 1000 // 1-min buffer
+    return { token, expiresAt }
+  } catch {
+    return null
+  }
+}
+
+function openAuthPopup(url: string): Promise<{ token: string; expiresAt: number }> {
   return new Promise((resolve, reject) => {
-    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
-    authUrl.searchParams.set('redirect_uri', window.location.origin + '/oauth-callback')
-    authUrl.searchParams.set('response_type', 'token')
-    authUrl.searchParams.set('scope', SCOPES)
-    authUrl.searchParams.set('include_granted_scopes', 'true')
-    authUrl.searchParams.set('prompt', 'none')   // try silent re-auth first
-
-    const popup = window.open(authUrl.toString(), 'google-auth', 'width=500,height=600')
+    const popup = window.open(url, 'google-auth', 'width=500,height=600,left=200,top=100')
     if (!popup) { reject(new Error('Popup blocked')); return }
 
-    const interval = setInterval(() => {
-      try {
-        const url = popup.location.href
-        if (url.includes('access_token')) {
-          clearInterval(interval)
-          popup.close()
-          const params = new URLSearchParams(url.split('#')[1])
-          const token = params.get('access_token')
-          const expiresIn = parseInt(params.get('expires_in') || '3600', 10)
-          const expiresAt = Date.now() + (expiresIn - 60) * 1000  // 1-min buffer
-          if (token) resolve({ token, expiresAt })
-          else reject(new Error('No token'))
-        } else if (url.includes('error=')) {
-          // Silent auth failed (user not logged in or consent revoked) — retry with consent
-          clearInterval(interval)
-          popup.close()
-          reAuthWithConsent().then(resolve).catch(reject)
-        }
-        if (popup.closed) {
-          clearInterval(interval)
-          reject(new Error('Popup closed'))
-        }
-      } catch { /* cross-origin, still loading */ }
+    let settled = false
+
+    // Listen for postMessage from oauth-callback.html
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      if (!event.data || event.data.type !== 'oauth-callback') return
+
+      cleanup()
+      const callbackUrl: string = event.data.url
+
+      if (callbackUrl.includes('error=')) {
+        reject(new Error('oauth-error:' + callbackUrl))
+        return
+      }
+
+      const result = parseTokenFromUrl(callbackUrl)
+      if (result) resolve(result)
+      else reject(new Error('No token in callback URL'))
+    }
+
+    window.addEventListener('message', onMessage)
+
+    // Fallback: poll for popup closure (user closed without completing)
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        cleanup()
+        if (!settled) reject(new Error('Popup closed by user'))
+      }
     }, 500)
+
+    function cleanup() {
+      settled = true
+      window.removeEventListener('message', onMessage)
+      clearInterval(pollClosed)
+      try { if (popup && !popup.closed) popup.close() } catch {}
+    }
   })
 }
 
-function reAuthWithConsent(): Promise<{ token: string; expiresAt: number }> {
-  return new Promise((resolve, reject) => {
-    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
-    authUrl.searchParams.set('redirect_uri', window.location.origin + '/oauth-callback')
-    authUrl.searchParams.set('response_type', 'token')
-    authUrl.searchParams.set('scope', SCOPES)
-    authUrl.searchParams.set('include_granted_scopes', 'true')
-
-    const popup = window.open(authUrl.toString(), 'google-auth', 'width=500,height=600')
-    if (!popup) { reject(new Error('Popup blocked')); return }
-
-    const interval = setInterval(() => {
-      try {
-        const url = popup.location.href
-        if (url.includes('access_token')) {
-          clearInterval(interval)
-          popup.close()
-          const params = new URLSearchParams(url.split('#')[1])
-          const token = params.get('access_token')
-          const expiresIn = parseInt(params.get('expires_in') || '3600', 10)
-          const expiresAt = Date.now() + (expiresIn - 60) * 1000
-          if (token) resolve({ token, expiresAt })
-          else reject(new Error('No token'))
-        }
-        if (popup.closed) { clearInterval(interval); reject(new Error('Popup closed')) }
-      } catch { /* cross-origin */ }
-    }, 500)
-  })
+export async function initGoogleAuth(): Promise<{ token: string; expiresAt: number }> {
+  // 1. Try silent re-auth first (no popup interaction if already logged in)
+  try {
+    const result = await openAuthPopup(buildAuthUrl('none'))
+    return result
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : ''
+    // If silent auth failed (needs consent / interaction), try with full consent screen
+    if (msg.startsWith('oauth-error:') || msg === 'Popup closed by user') {
+      return openAuthPopup(buildAuthUrl())
+    }
+    throw err
+  }
 }
 
 export async function fetchCalendarEvents(accessToken: string): Promise<CalendarEvent[]> {
