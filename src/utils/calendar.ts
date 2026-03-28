@@ -3,7 +3,47 @@ import type { CalendarEvent } from '../types'
 const GOOGLE_CLIENT_ID = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_GOOGLE_CLIENT_ID || ''
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 
-export function initGoogleAuth(): Promise<string> {
+export function initGoogleAuth(): Promise<{ token: string; expiresAt: number }> {
+  return new Promise((resolve, reject) => {
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
+    authUrl.searchParams.set('redirect_uri', window.location.origin + '/oauth-callback')
+    authUrl.searchParams.set('response_type', 'token')
+    authUrl.searchParams.set('scope', SCOPES)
+    authUrl.searchParams.set('include_granted_scopes', 'true')
+    authUrl.searchParams.set('prompt', 'none')   // try silent re-auth first
+
+    const popup = window.open(authUrl.toString(), 'google-auth', 'width=500,height=600')
+    if (!popup) { reject(new Error('Popup blocked')); return }
+
+    const interval = setInterval(() => {
+      try {
+        const url = popup.location.href
+        if (url.includes('access_token')) {
+          clearInterval(interval)
+          popup.close()
+          const params = new URLSearchParams(url.split('#')[1])
+          const token = params.get('access_token')
+          const expiresIn = parseInt(params.get('expires_in') || '3600', 10)
+          const expiresAt = Date.now() + (expiresIn - 60) * 1000  // 1-min buffer
+          if (token) resolve({ token, expiresAt })
+          else reject(new Error('No token'))
+        } else if (url.includes('error=')) {
+          // Silent auth failed (user not logged in or consent revoked) — retry with consent
+          clearInterval(interval)
+          popup.close()
+          reAuthWithConsent().then(resolve).catch(reject)
+        }
+        if (popup.closed) {
+          clearInterval(interval)
+          reject(new Error('Popup closed'))
+        }
+      } catch { /* cross-origin, still loading */ }
+    }, 500)
+  })
+}
+
+function reAuthWithConsent(): Promise<{ token: string; expiresAt: number }> {
   return new Promise((resolve, reject) => {
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
     authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
@@ -23,14 +63,13 @@ export function initGoogleAuth(): Promise<string> {
           popup.close()
           const params = new URLSearchParams(url.split('#')[1])
           const token = params.get('access_token')
-          if (token) resolve(token)
+          const expiresIn = parseInt(params.get('expires_in') || '3600', 10)
+          const expiresAt = Date.now() + (expiresIn - 60) * 1000
+          if (token) resolve({ token, expiresAt })
           else reject(new Error('No token'))
         }
-        if (popup.closed) {
-          clearInterval(interval)
-          reject(new Error('Popup closed'))
-        }
-      } catch { /* cross-origin, still loading */ }
+        if (popup.closed) { clearInterval(interval); reject(new Error('Popup closed')) }
+      } catch { /* cross-origin */ }
     }, 500)
   })
 }

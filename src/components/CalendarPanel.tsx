@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { X, Calendar, Clock, ExternalLink, RefreshCw, Globe, Plus, Sparkles } from './icons'
-import { getMockCalendarEvents, fetchCalendarEvents } from '../utils/calendar'
+import { getMockCalendarEvents, fetchCalendarEvents, initGoogleAuth } from '../utils/calendar'
 import { detectProjectFromText } from '../utils/ai'
 import { format, parseISO } from 'date-fns'
 import type { CalendarEvent } from '../types'
 
 export default function CalendarPanel() {
-  const { isCalendarOpen, setCalendarOpen, calendarEvents, setCalendarEvents, projects, items, addItem, activeProjectId, settings } = useStore()
+  const { isCalendarOpen, setCalendarOpen, calendarEvents, setCalendarEvents, projects, items, addItem, activeProjectId, settings, updateSettings } = useStore()
   const [isLoading, setIsLoading] = useState(false)
   const [detectedProjects, setDetectedProjects] = useState<Record<string, string | null>>({})
   const [isDetecting, setIsDetecting] = useState(false)
@@ -22,13 +22,46 @@ export default function CalendarPanel() {
 
   if (!isCalendarOpen) return null
 
+  const isTokenExpired = () => {
+    if (!settings.googleTokenExpiry) return false
+    return Date.now() > settings.googleTokenExpiry
+  }
+
+  const reconnect = async () => {
+    try {
+      const { token, expiresAt } = await initGoogleAuth()
+      updateSettings({ googleCalendarConnected: true, googleAccessToken: token, googleTokenExpiry: expiresAt })
+      return token
+    } catch {
+      updateSettings({ googleCalendarConnected: false, googleAccessToken: '', googleTokenExpiry: 0 })
+      return null
+    }
+  }
+
   const loadEvents = async () => {
     setIsLoading(true)
     if (settings.googleCalendarConnected && settings.googleAccessToken) {
-      const events = await fetchCalendarEvents(settings.googleAccessToken)
-      setCalendarEvents(events)
+      let token = settings.googleAccessToken
+      // Auto-refresh if token expired
+      if (isTokenExpired()) {
+        const refreshed = await reconnect()
+        if (refreshed) token = refreshed
+        else { setCalendarEvents(getMockCalendarEvents()); setIsLoading(false); return }
+      }
+      const events = await fetchCalendarEvents(token)
+      if (events.length === 0 && isTokenExpired()) {
+        // Token silently expired, try reconnect
+        const refreshed = await reconnect()
+        if (refreshed) {
+          const retried = await fetchCalendarEvents(refreshed)
+          setCalendarEvents(retried.length > 0 ? retried : getMockCalendarEvents())
+        } else {
+          setCalendarEvents(getMockCalendarEvents())
+        }
+      } else {
+        setCalendarEvents(events)
+      }
     } else {
-      // Demo mode
       setCalendarEvents(getMockCalendarEvents())
     }
     setIsLoading(false)
@@ -275,18 +308,27 @@ export default function CalendarPanel() {
           )}
         </div>
 
-        {/* Connect button */}
-        {!settings.googleCalendarConnected && (
+        {/* Connect / Reconnect */}
+        {(!settings.googleCalendarConnected || isTokenExpired()) && (
           <div className="p-4 border-t border-white/10">
-            <div className="text-xs text-gray-500 text-center mb-2">
-              Currently showing demo events
-            </div>
-            <button
-              onClick={loadEvents}
-              className="w-full py-2 bg-white/10 hover:bg-white/15 text-gray-300 text-xs rounded-xl transition-colors"
-            >
-              Refresh Demo Events
-            </button>
+            {settings.googleCalendarConnected && isTokenExpired() ? (
+              <>
+                <p className="text-xs text-amber-400 text-center mb-2">⚠ Session expired — reconnecting...</p>
+                <button
+                  onClick={() => reconnect().then(() => loadEvents())}
+                  className="w-full py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs rounded-xl transition-colors border border-amber-500/25"
+                >
+                  Reconnect Google Calendar
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-xs text-gray-500 text-center mb-2">Currently showing demo events</div>
+                <button onClick={loadEvents} className="w-full py-2 bg-white/10 hover:bg-white/15 text-gray-300 text-xs rounded-xl transition-colors">
+                  Refresh Demo Events
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

@@ -38,7 +38,7 @@ export default function Header() {
             <span className="text-white text-xs font-bold">W</span>
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight">WorkSpace</h1>
+            <h1 className="text-sm font-bold text-white tracking-tight">Pawas' Workspace</h1>
             <p className="text-xs text-gray-600">{today}</p>
           </div>
         </div>

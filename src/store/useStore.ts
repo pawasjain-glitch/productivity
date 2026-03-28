@@ -81,6 +81,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   anthropicApiKey: '',
   googleCalendarConnected: false,
   googleAccessToken: '',
+  googleTokenExpiry: 0,
   defaultView: 'todos',
   sidebarCollapsed: false,
 }
@@ -222,7 +223,7 @@ export const useStore = create<StoreState>()(
       moveItemId: null,
       pipeline: [],
       isPipelineOpen: false,
-      isMasterView: false,
+      isMasterView: true,
 
       addProject: (name, color, icon = '📁', description = '') => {
         const usedColors = get().projects.map(p => p.color)

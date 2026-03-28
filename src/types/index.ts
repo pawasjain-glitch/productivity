@@ -134,6 +134,7 @@ export interface AppSettings {
   anthropicApiKey: string
   googleCalendarConnected: boolean
   googleAccessToken: string
+  googleTokenExpiry: number   // unix ms timestamp; 0 = never set
   defaultView: SectionType
   sidebarCollapsed: boolean
 }
@@ -181,8 +182,8 @@ export const PROJECT_COLORS = [
 ]
 
 export const SECTION_LABELS: Record<SectionType, string> = {
-  todos: 'To-Dos',
-  tasks: 'Tasks',
+  todos: 'To-Do (Others)',
+  tasks: 'My Tasks',
   followups: 'Follow-ups',
   conversations: 'Conversations',
   ideas: 'Ideas & Plans',

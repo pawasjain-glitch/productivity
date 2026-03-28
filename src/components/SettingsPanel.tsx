@@ -114,8 +114,8 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                     setCalendarError('')
                     setCalendarLoading(true)
                     try {
-                      const token = await initGoogleAuth()
-                      updateSettings({ googleCalendarConnected: true, googleAccessToken: token })
+                      const { token, expiresAt } = await initGoogleAuth()
+                      updateSettings({ googleCalendarConnected: true, googleAccessToken: token, googleTokenExpiry: expiresAt })
                     } catch (e) {
                       setCalendarError((e as Error).message || 'Connection failed')
                     }

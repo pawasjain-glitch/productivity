@@ -9,6 +9,7 @@ import MoveItemModal from './components/modals/MoveItemModal'
 import ReminderNotifications from './components/ReminderNotifications'
 import SalesPipeline from './components/SalesPipeline'
 import MasterView from './components/MasterView'
+import PasswordGate from './components/PasswordGate'
 import TodoSection from './components/sections/TodoSection'
 import TaskSection from './components/sections/TaskSection'
 import FollowUpSection from './components/sections/FollowUpSection'
@@ -64,6 +65,7 @@ function AppLayout() {
 
 export default function App() {
   return (
+    <PasswordGate>
     <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden">
       <Header />
       <ProjectTabs />
@@ -77,5 +79,6 @@ export default function App() {
       <ReminderNotifications />
       <SalesPipeline />
     </div>
+    </PasswordGate>
   )
 }
