@@ -151,6 +151,7 @@ export interface PipelineDeal {
   value?: string
   nextFollowUpDate?: string   // ISO date string e.g. "2024-04-15"
   followUpItemId?: string     // ID of the linked FollowUpItem in the workspace
+  notesTodoId?: string        // ID of the linked TodoItem created from notes
   createdAt: string
   updatedAt: string
 }

@@ -247,6 +247,31 @@ export default function SalesPipeline() {
     }
   }
 
+  const handleNotesChange = (deal: PipelineDeal, notes: string) => {
+    updateDeal(deal.id, { notes })
+    if (!notes.trim() || !targetProject) return
+
+    if (deal.notesTodoId) {
+      // Update the existing To-Do text to reflect the latest notes
+      updateItem(deal.notesTodoId, {
+        text: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any)
+    } else {
+      // Create a new To-Do in WLDD Core (or first project)
+      const newTodo = addItem({
+        type: 'todo',
+        text: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
+        completed: false,
+        priority: 'medium',
+        projectIds: [targetProject.id],
+        tags: ['pipeline'],
+        isStarred: false,
+      })
+      updateDeal(deal.id, { notesTodoId: newTodo.id })
+    }
+  }
+
   const handleDeleteDeal = (deal: PipelineDeal) => {
     // Also remove the linked followup item if it exists
     if (deal.followUpItemId) {
@@ -451,10 +476,15 @@ export default function SalesPipeline() {
                     <td className="px-1 py-1 max-w-[280px]">
                       <EditableCell
                         value={deal.notes}
-                        placeholder="Add notes..."
-                        onChange={v => updateDeal(deal.id, { notes: v })}
+                        placeholder="Add notes → creates a To-Do..."
+                        onChange={v => handleNotesChange(deal, v)}
                         multiline
                       />
+                      {deal.notesTodoId && (
+                        <p className="px-2 pb-0.5 text-[10px] text-emerald-500/60 flex items-center gap-1">
+                          <CheckCircle2 size={9} /> Synced to To-Dos in {targetProject?.name}
+                        </p>
+                      )}
                     </td>
 
                     <td className="px-3 py-2">

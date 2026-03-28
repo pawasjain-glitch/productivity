@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../../store/useStore'
 import type { MeetingItem } from '../../types'
-import { Plus, Trash2, Move, Calendar, Clock, ExternalLink, Check } from '../icons'
+import { Plus, Trash2, Move, Calendar, Clock, ExternalLink, Check, CheckSquare } from '../icons'
 import { format, parseISO, isAfter, isBefore, addHours } from 'date-fns'
 
 const STATUS_STYLES: Record<MeetingItem['status'], string> = {
@@ -11,10 +11,12 @@ const STATUS_STYLES: Record<MeetingItem['status'], string> = {
 }
 
 export default function MeetingSection() {
-  const { items, activeProjectId, addItem, updateItem, deleteItem, setMoveModal, calendarEvents } = useStore()
+  const { items, activeProjectId, addItem, updateItem, deleteItem, setMoveModal } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [newAction, setNewAction] = useState('')
+  const [newAction, setNewAction] = useState<Record<string, string>>({})
+  // Track which action texts had tasks auto-created this session
+  const [taskedActions, setTaskedActions] = useState<Set<string>>(new Set())
   const [form, setForm] = useState({
     title: '', description: '', startTime: '', endTime: '',
     attendees: '', location: '', meetingUrl: ''
@@ -55,11 +57,38 @@ export default function MeetingSection() {
   }
 
   const handleAddAction = (meeting: MeetingItem) => {
-    if (!newAction.trim()) return
+    const action = (newAction[meeting.id] || '').trim()
+    if (!action) return
+
+    // 1. Save action item to meeting
     updateItem(meeting.id, {
-      actionItems: [...meeting.actionItems, newAction.trim()]
+      actionItems: [...meeting.actionItems, action]
     } as Partial<MeetingItem>)
-    setNewAction('')
+
+    // 2. Auto-create a Task in the meeting's project
+    const projectId = meeting.projectIds[0] || activeProjectId
+    if (projectId) {
+      addItem({
+        type: 'task',
+        title: action,
+        description: `Action item from meeting: ${meeting.title}`,
+        status: 'todo',
+        priority: 'medium',
+        progress: 0,
+        projectIds: [projectId],
+        tags: ['meeting-action'],
+        isStarred: false,
+      })
+      setTaskedActions(prev => new Set([...prev, `${meeting.id}::${action}`]))
+    }
+
+    setNewAction(prev => ({ ...prev, [meeting.id]: '' }))
+  }
+
+  const handleRemoveAction = (meeting: MeetingItem, index: number) => {
+    updateItem(meeting.id, {
+      actionItems: meeting.actionItems.filter((_, i) => i !== index)
+    } as Partial<MeetingItem>)
   }
 
   const upcoming = meetings.filter(m => m.status === 'upcoming')
@@ -71,6 +100,7 @@ export default function MeetingSection() {
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold text-white">Meetings</h2>
           <span className="text-xs text-blue-400">{upcoming.length} upcoming</span>
+          {completed.length > 0 && <span className="text-xs text-gray-500">{completed.length} completed</span>}
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -180,6 +210,12 @@ export default function MeetingSection() {
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[meeting.status]}`}>
                     {meeting.status}
                   </span>
+                  {meeting.notes && (
+                    <span className="text-xs text-gray-600" title="Has meeting notes">📝</span>
+                  )}
+                  {meeting.actionItems.length > 0 && (
+                    <span className="text-xs text-indigo-500/70">{meeting.actionItems.length} action{meeting.actionItems.length !== 1 ? 's' : ''}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
                   <span className="flex items-center gap-1 text-xs text-gray-500">
@@ -222,45 +258,61 @@ export default function MeetingSection() {
             </div>
 
             {expandedId === meeting.id && (
-              <div className="px-4 pb-4 border-t border-white/5 pt-3 space-y-3 animate-slide-in">
+              <div className="px-4 pb-4 border-t border-white/5 pt-3 space-y-4 animate-slide-in">
                 {meeting.description && (
                   <p className="text-sm text-gray-400">{meeting.description}</p>
                 )}
 
-                {/* Notes */}
+                {/* Notes — persist on every keystroke via store → localStorage */}
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block font-medium">Meeting Notes</label>
                   <textarea
                     placeholder="Capture notes, decisions, key points..."
                     value={meeting.notes}
                     onChange={e => updateItem(meeting.id, { notes: e.target.value } as Partial<MeetingItem>)}
-                    rows={3}
-                    className="w-full bg-white/5 text-gray-300 placeholder-gray-600 text-sm rounded-lg px-3 py-2 focus:outline-none resize-none border border-white/10"
+                    rows={4}
+                    className="w-full bg-white/5 text-gray-300 placeholder-gray-600 text-sm rounded-lg px-3 py-2 focus:outline-none resize-none border border-white/10 focus:border-indigo-500/40"
                     onClick={e => e.stopPropagation()}
                   />
                 </div>
 
-                {/* Action items */}
+                {/* Action Items → auto-create Tasks */}
                 <div>
-                  <label className="text-xs text-gray-500 mb-1.5 block font-medium">Action Items</label>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <label className="text-xs text-gray-500 font-medium">Action Items</label>
+                    <span className="text-[10px] text-indigo-400/60 flex items-center gap-1">
+                      <CheckSquare size={9} /> auto-creates Tasks
+                    </span>
+                  </div>
                   {meeting.actionItems.map((action, i) => (
-                    <div key={i} className="flex items-center gap-2 py-1">
+                    <div key={i} className="flex items-center gap-2 py-1 group/action">
                       <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
-                      <span className="text-xs text-gray-300">{action}</span>
+                      <span className="text-xs text-gray-300 flex-1">{action}</span>
+                      {taskedActions.has(`${meeting.id}::${action}`) && (
+                        <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+                          ✓ Task created
+                        </span>
+                      )}
+                      <button
+                        onClick={e => { e.stopPropagation(); handleRemoveAction(meeting, i) }}
+                        className="opacity-0 group-hover/action:opacity-100 p-0.5 text-gray-600 hover:text-red-400 transition-all"
+                      >
+                        <Trash2 size={10} />
+                      </button>
                     </div>
                   ))}
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex gap-2 mt-2">
                     <input
-                      placeholder="Add action item..."
-                      value={newAction}
-                      onChange={e => setNewAction(e.target.value)}
+                      placeholder="Add action item → creates a Task..."
+                      value={newAction[meeting.id] || ''}
+                      onChange={e => setNewAction(prev => ({ ...prev, [meeting.id]: e.target.value }))}
                       onKeyDown={e => e.key === 'Enter' && handleAddAction(meeting)}
-                      className="flex-1 bg-white/5 text-gray-300 placeholder-gray-600 text-xs rounded-lg px-3 py-1.5 focus:outline-none border border-white/10"
+                      className="flex-1 bg-white/5 text-gray-300 placeholder-gray-600 text-xs rounded-lg px-3 py-1.5 focus:outline-none border border-white/10 focus:border-indigo-500/40"
                       onClick={e => e.stopPropagation()}
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); handleAddAction(meeting) }}
-                      className="p-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-xs transition-colors"
+                      className="p-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition-colors"
                     >
                       <Plus size={13} />
                     </button>
