@@ -19,6 +19,7 @@ import ManagementSection from './components/sections/ManagementSection'
 import MeetingSection from './components/sections/MeetingSection'
 import NoteSection from './components/sections/NoteSection'
 import OverviewSection from './components/sections/OverviewSection'
+import CloudSync from './components/CloudSync'
 
 function SectionContent() {
   const { activeSection, activeProjectId, isMasterView } = useStore()
@@ -78,6 +79,7 @@ export default function App() {
       <MoveItemModal />
       <ReminderNotifications />
       <SalesPipeline />
+      <CloudSync />
     </div>
     </PasswordGate>
   )

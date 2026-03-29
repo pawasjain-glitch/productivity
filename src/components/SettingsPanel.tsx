@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import { X, Settings, Eye, EyeOff, Globe, Sparkles, Check } from './icons'
 import { initAI } from '../utils/ai'
@@ -9,12 +9,77 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const { settings, updateSettings, projects } = useStore()
+  const { settings, updateSettings, projects, cloudSyncStatus, lastCloudSync } = useStore()
   const [showKey, setShowKey] = useState(false)
   const [apiKey, setApiKey] = useState(settings.anthropicApiKey)
   const [saved, setSaved] = useState(false)
   const [calendarLoading, setCalendarLoading] = useState(false)
   const [calendarError, setCalendarError] = useState('')
+  const [importError, setImportError] = useState('')
+  const [importSuccess, setImportSuccess] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleExport = () => {
+    const state = useStore.getState()
+    const data = {
+      projects: state.projects,
+      items: state.items,
+      pipeline: state.pipeline,
+      briefings: state.briefings,
+      activeProjectId: state.activeProjectId,
+      activeSection: state.activeSection,
+      exportedAt: new Date().toISOString(),
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `workspace-data-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportError('')
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string)
+        useStore.setState({
+          projects: data.projects ?? [],
+          items: data.items ?? [],
+          pipeline: data.pipeline ?? [],
+          briefings: data.briefings ?? [],
+          activeProjectId: data.activeProjectId ?? null,
+          activeSection: data.activeSection ?? 'todos',
+        })
+        setImportSuccess(true)
+        setTimeout(() => setImportSuccess(false), 3000)
+      } catch {
+        setImportError('Invalid file — could not parse JSON.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const syncStatusColor = {
+    idle: 'bg-gray-500',
+    syncing: 'bg-yellow-400 animate-pulse',
+    synced: 'bg-green-400',
+    error: 'bg-red-400',
+    unavailable: 'bg-gray-600',
+  }[cloudSyncStatus]
+
+  const syncStatusLabel = {
+    idle: 'Idle',
+    syncing: 'Syncing…',
+    synced: lastCloudSync ? `Synced ${new Date(lastCloudSync).toLocaleTimeString()}` : 'Synced',
+    error: 'Sync error',
+    unavailable: 'Not configured',
+  }[cloudSyncStatus]
 
   const handleSaveKey = () => {
     updateSettings({ anthropicApiKey: apiKey })
@@ -147,6 +212,61 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                   {t}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Data Sync */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-green-400 text-sm">☁</span>
+              <h4 className="text-sm font-semibold text-gray-200">Data Sync</h4>
+            </div>
+            <div className="space-y-3">
+              {/* Status */}
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                <div>
+                  <p className="text-xs font-medium text-gray-300">Cloud Sync Status</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{syncStatusLabel}</p>
+                </div>
+                <div className={`w-2 h-2 rounded-full ${syncStatusColor}`} />
+              </div>
+              {cloudSyncStatus === 'unavailable' && (
+                <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 leading-relaxed">
+                  Cloud sync requires Upstash Redis. In Vercel → your project → Storage → Connect Database → Upstash KV, then redeploy.
+                </p>
+              )}
+              {/* Export / Import */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleExport}
+                  className="flex-1 py-2 text-xs font-medium rounded-xl border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 transition-colors"
+                >
+                  ↓ Export Data
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex-1 py-2 text-xs font-medium rounded-xl border transition-colors ${
+                    importSuccess
+                      ? 'border-green-500/40 bg-green-500/10 text-green-400'
+                      : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  {importSuccess ? '✓ Imported!' : '↑ Import Data'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleImport}
+                />
+              </div>
+              {importError && (
+                <p className="text-xs text-red-400">{importError}</p>
+              )}
+              <p className="text-xs text-gray-600">
+                Export saves all your data as JSON. Import restores from a previous export.
+              </p>
             </div>
           </div>
 

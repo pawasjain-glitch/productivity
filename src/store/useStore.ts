@@ -32,6 +32,8 @@ interface StoreState {
   pipeline: PipelineDeal[]
   isPipelineOpen: boolean
   isMasterView: boolean
+  cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error' | 'unavailable'
+  lastCloudSync: string | null
 
   // Project actions
   addProject: (name: string, color?: string, icon?: string, description?: string) => Project
@@ -74,6 +76,7 @@ interface StoreState {
   deleteDeal: (id: string) => void
   setPipelineOpen: (open: boolean) => void
   setMasterView: (v: boolean) => void
+  setCloudSyncStatus: (status: StoreState['cloudSyncStatus'], lastSync?: string) => void
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -224,6 +227,8 @@ export const useStore = create<StoreState>()(
       pipeline: [],
       isPipelineOpen: false,
       isMasterView: true,
+      cloudSyncStatus: 'idle',
+      lastCloudSync: null,
 
       addProject: (name, color, icon = '📁', description = '') => {
         const usedColors = get().projects.map(p => p.color)
@@ -345,6 +350,8 @@ export const useStore = create<StoreState>()(
 
       setPipelineOpen: (open) => set({ isPipelineOpen: open }),
       setMasterView: (v) => set({ isMasterView: v }),
+      setCloudSyncStatus: (status, lastSync) =>
+        set({ cloudSyncStatus: status, ...(lastSync ? { lastCloudSync: lastSync } : {}) }),
     }),
     {
       name: 'workspace-storage',
