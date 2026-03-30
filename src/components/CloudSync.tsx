@@ -32,22 +32,37 @@ export default function CloudSync() {
     setCloudSyncStatus } = useStore()
 
   const initialized = useRef(false)
+  const pullComplete = useRef(false)   // don't push until first pull is done
   const skipNextPush = useRef(false)   // prevents push-right-after-pull loop
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Pull from cloud ─────────────────────────────────────────────────────
 
   const applyCloudData = (cloudData: Record<string, unknown>) => {
+    const cloudItems = cloudData.items as Array<{ updatedAt: string }> | undefined
+
+    // Never overwrite local data with empty cloud data
+    if (!cloudItems || cloudItems.length === 0) {
+      setCloudSyncStatus('synced', new Date().toISOString())
+      return
+    }
+
     // Pick the most recently touched items to decide which version wins
-    const localTs = useStore.getState().items.reduce(
+    const localItems = useStore.getState().items
+    const localTs = localItems.reduce(
       (max, i) => Math.max(max, new Date(i.updatedAt).getTime()), 0
     )
-    const cloudItems = cloudData.items as Array<{ updatedAt: string }> | undefined
-    const cloudTs = cloudItems?.reduce(
+    const cloudTs = cloudItems.reduce(
       (max, i) => Math.max(max, new Date(i.updatedAt).getTime()), 0
-    ) ?? 0
+    )
 
-    if (cloudTs <= localTs) {
+    // Also never apply cloud data if local has more items and similar timestamps
+    const localProjects = useStore.getState().projects
+    const cloudProjects = cloudData.projects as Array<unknown> | undefined
+    const localHasMoreData = localItems.length > cloudItems.length &&
+                             localProjects.length > (cloudProjects?.length ?? 0)
+
+    if (cloudTs <= localTs || localHasMoreData) {
       setCloudSyncStatus('synced', new Date().toISOString())
       return   // local is up-to-date or newer — don't overwrite
     }
@@ -77,6 +92,8 @@ export default function CloudSync() {
       else setCloudSyncStatus('synced', new Date().toISOString())  // cloud is empty (fresh)
     } catch {
       setCloudSyncStatus('error')
+    } finally {
+      pullComplete.current = true  // allow pushes now
     }
   }
 
@@ -100,6 +117,7 @@ export default function CloudSync() {
 
   useEffect(() => {
     if (!initialized.current) return
+    if (!pullComplete.current) return  // never push before first pull completes
 
     // Skip this push if we just applied cloud data
     if (skipNextPush.current) {
