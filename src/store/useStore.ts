@@ -89,6 +89,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   sidebarCollapsed: false,
 }
 
+// Demo data uses a fixed old timestamp so it can NEVER win a cloud-sync
+// timestamp comparison against real user data.
+const DEMO_TS = '2020-01-01T00:00:00.000Z'
+
 const SAMPLE_PROJECTS: Project[] = [
   {
     id: 'project-1',
@@ -96,7 +100,7 @@ const SAMPLE_PROJECTS: Project[] = [
     color: PROJECT_COLORS[0],
     icon: '🚀',
     description: 'Q1 product launch campaign and coordination',
-    createdAt: now(),
+    createdAt: DEMO_TS,
     isArchived: false,
     order: 0,
   },
@@ -106,7 +110,7 @@ const SAMPLE_PROJECTS: Project[] = [
     color: PROJECT_COLORS[2],
     icon: '⚙️',
     description: 'Technical roadmap and infrastructure improvements',
-    createdAt: now(),
+    createdAt: DEMO_TS,
     isArchived: false,
     order: 1,
   },
@@ -116,7 +120,7 @@ const SAMPLE_PROJECTS: Project[] = [
     color: PROJECT_COLORS[4],
     icon: '📊',
     description: 'Marketing campaigns and brand strategy',
-    createdAt: now(),
+    createdAt: DEMO_TS,
     isArchived: false,
     order: 2,
   },
@@ -126,67 +130,65 @@ const SAMPLE_ITEMS: AnyItem[] = [
   {
     id: 'todo-1', type: 'todo', text: 'Finalize launch announcement copy', completed: false,
     projectIds: ['project-1'], priority: 'high', tags: ['copy', 'launch'],
-    isStarred: true, createdAt: now(), updatedAt: now(),
+    isStarred: true, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as TodoItem,
   {
     id: 'todo-2', type: 'todo', text: 'Review pricing strategy with team', completed: false,
     projectIds: ['project-1'], priority: 'urgent', tags: ['pricing'],
-    isStarred: false, createdAt: now(), updatedAt: now(),
+    isStarred: false, createdAt: DEMO_TS, updatedAt: DEMO_TS,
     dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
   } as TodoItem,
   {
     id: 'todo-3', type: 'todo', text: 'Set up CI/CD pipeline for staging', completed: true,
     projectIds: ['project-2'], priority: 'medium', tags: ['devops'],
-    isStarred: false, createdAt: now(), updatedAt: now(),
+    isStarred: false, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as TodoItem,
   {
     id: 'task-1', type: 'task', title: 'Build landing page', description: 'Design and implement the product launch landing page with animations and responsive layout.',
     status: 'in_progress', priority: 'high', progress: 65,
     projectIds: ['project-1'], tags: ['design', 'frontend'],
-    isStarred: true, createdAt: now(), updatedAt: now(),
+    isStarred: true, createdAt: DEMO_TS, updatedAt: DEMO_TS,
     dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-    assignee: 'Sarah Chen',
   } as TaskItem,
   {
     id: 'task-2', type: 'task', title: 'API rate limiting implementation', description: 'Implement rate limiting middleware for all public API endpoints.',
     status: 'todo', priority: 'medium', progress: 0,
     projectIds: ['project-2'], tags: ['backend', 'security'],
-    isStarred: false, createdAt: now(), updatedAt: now(),
-    assignee: 'Alex Kumar',
+    isStarred: false, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as TaskItem,
   {
     id: 'followup-1', type: 'followup', title: 'Follow up on partnership proposal',
     contact: 'Mike Johnson (Acme Corp)', description: 'Awaiting feedback on the co-marketing proposal sent last week.',
     status: 'pending', channel: 'email',
     projectIds: ['project-3'], tags: ['partnership'],
-    isStarred: true, createdAt: now(), updatedAt: now(),
+    isStarred: true, createdAt: DEMO_TS, updatedAt: DEMO_TS,
     dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
   } as FollowUpItem,
   {
     id: 'conversation-1', type: 'conversation', title: 'Launch timeline discussion',
     participants: ['Sarah Chen', 'Alex Kumar', 'You'],
     summary: 'Ongoing discussion about final launch date and go-to-market strategy.',
-    status: 'open', lastUpdated: now(),
+    status: 'open', lastUpdated: DEMO_TS,
     messages: [
-      { author: 'Sarah Chen', text: 'Can we move the launch to March 15th?', time: new Date(Date.now() - 3600000).toISOString() },
-      { author: 'You', text: 'Let me check with the engineering team first.', time: new Date(Date.now() - 1800000).toISOString() },
+      { author: 'Sarah Chen', text: 'Can we move the launch to March 15th?', time: DEMO_TS },
+      { author: 'You', text: 'Let me check with the engineering team first.', time: DEMO_TS },
     ],
     projectIds: ['project-1'], tags: ['launch', 'timeline'],
-    isStarred: false, createdAt: now(), updatedAt: now(),
+    isStarred: false, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as ConversationItem,
   {
     id: 'idea-1', type: 'idea', title: 'Viral referral program',
     description: 'Add a referral mechanism where users get 1 month free for each new user they bring in. Could be a significant growth driver.',
     category: 'Growth', status: 'exploring', impact: 'high',
     projectIds: ['project-1', 'project-3'], tags: ['growth', 'viral'],
-    isStarred: true, createdAt: now(), updatedAt: now(),
+    isStarred: true, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as IdeaItem,
   {
     id: 'mgmt-1', type: 'management', title: 'Headcount request for Q2',
     description: 'Need to discuss hiring 2 senior engineers and 1 product designer for Q2 to support roadmap.',
     priority: 'high', status: 'pending',
     projectIds: ['project-2'], tags: ['hiring', 'headcount'],
-    isStarred: false, createdAt: now(), updatedAt: now(),
+    isStarred: false, createdAt: DEMO_TS, updatedAt: DEMO_TS,
     targetDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   } as ManagementItem,
   {
@@ -197,14 +199,14 @@ const SAMPLE_ITEMS: AnyItem[] = [
     attendees: ['Sarah Chen', 'Alex Kumar', 'Product Team'],
     status: 'upcoming', notes: '', actionItems: [],
     projectIds: ['project-1', 'project-2'], tags: ['recurring'],
-    isStarred: false, createdAt: now(), updatedAt: now(),
+    isStarred: false, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as MeetingItem,
   {
     id: 'note-1', type: 'note', title: 'Brand Voice Guidelines',
     content: '# Brand Voice\n\n- **Tone**: Confident but approachable\n- **Style**: Clear, concise, no jargon\n- **Values**: Innovation, trust, simplicity\n\n## Key Messages\n1. We solve real problems\n2. Built for scale\n3. Customer-first always',
     color: '#6366f1',
     projectIds: ['project-3'], tags: ['brand', 'guidelines'],
-    isStarred: true, createdAt: now(), updatedAt: now(),
+    isStarred: true, createdAt: DEMO_TS, updatedAt: DEMO_TS,
   } as NoteItem,
 ]
 

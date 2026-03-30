@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore'
 import { X, Settings, Eye, EyeOff, Globe, Sparkles, Check } from './icons'
 import { initAI } from '../utils/ai'
 import { initGoogleAuth } from '../utils/calendar'
+import { pushCloud } from './CloudSync'
 
 interface SettingsPanelProps {
   onClose: () => void
@@ -17,6 +18,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [calendarError, setCalendarError] = useState('')
   const [importError, setImportError] = useState('')
   const [importSuccess, setImportSuccess] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = () => {
@@ -235,6 +237,26 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Cloud sync requires Upstash Redis. In Vercel → your project → Storage → Connect Database → Upstash KV, then redeploy.
                 </p>
               )}
+              {/* Sync Now button */}
+              {cloudSyncStatus !== 'unavailable' && (
+                <button
+                  onClick={async () => {
+                    setSyncing(true)
+                    const s = useStore.getState()
+                    const ok = await pushCloud({
+                      projects: s.projects, items: s.items, pipeline: s.pipeline,
+                      briefings: s.briefings, activeProjectId: s.activeProjectId,
+                      activeSection: s.activeSection, syncedAt: new Date().toISOString(),
+                    }).catch(() => false)
+                    s.setCloudSyncStatus(ok ? 'synced' : 'error', ok ? new Date().toISOString() : undefined)
+                    setSyncing(false)
+                  }}
+                  disabled={syncing}
+                  className="w-full py-2 text-xs font-medium rounded-xl border border-indigo-500/30 bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 transition-colors disabled:opacity-50"
+                >
+                  {syncing ? 'Syncing…' : '↑ Push My Data to Cloud'}
+                </button>
+              )}
               {/* Export / Import */}
               <div className="flex gap-2">
                 <button
@@ -265,7 +287,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 <p className="text-xs text-red-400">{importError}</p>
               )}
               <p className="text-xs text-gray-600">
-                Export saves all your data as JSON. Import restores from a previous export.
+                Use "Push My Data to Cloud" to sync to other devices. Export saves a local backup.
               </p>
             </div>
           </div>
