@@ -1,11 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { X, Plus, Trash2, Search, TrendingUp, Bell, CheckCircle2 } from './icons'
-import type { PipelineDeal, PipelineStatus } from '../types'
+import type { PipelineDeal, PipelineStatus, PipelineTab } from '../types'
 import { PIPELINE_STATUSES } from '../types'
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns'
 
 const STATUS_MAP = Object.fromEntries(PIPELINE_STATUSES.map(s => [s.value, s]))
+
+const TAB_CONFIG: { id: PipelineTab; label: string; color: string; accent: string; notesType: 'todo' | 'task' }[] = [
+  { id: 'wldd',       label: 'WLDD Core',   color: 'from-emerald-500 to-teal-600',   accent: 'emerald', notesType: 'todo' },
+  { id: 'scoopwhoop', label: 'ScoopWhoop',  color: 'from-violet-500 to-purple-600',  accent: 'violet',  notesType: 'task' },
+]
 
 /* ─── Status Badge ───────────────────────────────────────────── */
 
@@ -117,7 +122,6 @@ function FollowUpCell({ deal, onDateChange }: {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Label & colour based on urgency
   let label = ''
   let labelClass = 'text-gray-500'
   let dotClass = ''
@@ -189,7 +193,7 @@ function FollowUpCell({ deal, onDateChange }: {
           {date && deal.followUpItemId && (
             <p className="text-[10px] text-gray-600 text-center mt-2 flex items-center justify-center gap-1">
               <CheckCircle2 size={10} className="text-emerald-500" />
-              Synced to WLDD Core follow-ups
+              Synced to follow-ups
             </p>
           )}
         </div>
@@ -198,38 +202,48 @@ function FollowUpCell({ deal, onDateChange }: {
   )
 }
 
-/* ─── Main Component ─────────────────────────────────────────── */
+/* ─── Pipeline Table ─────────────────────────────────────────── */
 
-export default function SalesPipeline() {
-  const { isPipelineOpen, setPipelineOpen, pipeline, addDeal, updateDeal, deleteDeal, projects, addItem, updateItem, deleteItem } = useStore()
-  const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<PipelineStatus | 'all'>('all')
+function PipelineTable({
+  activeTab,
+  search,
+  filterStatus,
+}: {
+  activeTab: PipelineTab
+  search: string
+  filterStatus: PipelineStatus | 'all'
+}) {
+  const { pipeline, addDeal, updateDeal, deleteDeal, projects, addItem, updateItem, deleteItem } = useStore()
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  if (!isPipelineOpen) return null
+  const tabCfg = TAB_CONFIG.find(t => t.id === activeTab)!
 
-  // Find "WLDD Core" project, fall back to first project
-  const targetProject = projects.find(p => p.name.toLowerCase().includes('wldd') && p.name.toLowerCase().includes('core'))
-    || projects.find(p => !p.isArchived)
+  // Find the project that corresponds to this tab
+  const targetProject = activeTab === 'wldd'
+    ? projects.find(p => p.name.toLowerCase().includes('wldd') && p.name.toLowerCase().includes('core')) || projects.find(p => !p.isArchived)
+    : projects.find(p => p.name.toLowerCase().includes('scoop')) || projects.find(p => !p.isArchived)
+
+  // Only deals for this tab (backwards-compat: deals without pipelineTab default to 'wldd')
+  const tabDeals = pipeline.filter(d => (d.pipelineTab ?? 'wldd') === activeTab)
+
+  const filtered = tabDeals.filter(d => {
+    const q = search.toLowerCase()
+    const matchesSearch = !q || [d.clientName, d.internalPOC, d.clientPOC, d.notes].some(f => f?.toLowerCase().includes(q))
+    const matchesStatus = filterStatus === 'all' || d.status === filterStatus
+    return matchesSearch && matchesStatus
+  })
 
   const handleFollowUpDate = (deal: PipelineDeal, date: string | null) => {
     if (!date) {
-      // Remove: delete linked followup item and clear from deal
-      if (deal.followUpItemId) {
-        deleteItem(deal.followUpItemId)
-      }
+      if (deal.followUpItemId) deleteItem(deal.followUpItemId)
       updateDeal(deal.id, { nextFollowUpDate: undefined, followUpItemId: undefined })
       return
     }
 
-    const isoDate = `${date}T09:00:00.000Z` // 9am on that date
-
     if (deal.followUpItemId) {
-      // Update existing followup item's dueDate
       updateItem(deal.followUpItemId, { dueDate: date } as Parameters<typeof updateItem>[1])
       updateDeal(deal.id, { nextFollowUpDate: date })
     } else {
-      // Create new FollowUpItem in WLDD Core (or first project)
       if (!targetProject) return
       const newItem = addItem({
         type: 'followup',
@@ -252,50 +266,249 @@ export default function SalesPipeline() {
     if (!notes.trim() || !targetProject) return
 
     if (deal.notesTodoId) {
-      // Update the existing To-Do text to reflect the latest notes
-      updateItem(deal.notesTodoId, {
-        text: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any)
+      // Update existing linked item
+      if (tabCfg.notesType === 'task') {
+        updateItem(deal.notesTodoId, {
+          title: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any)
+      } else {
+        updateItem(deal.notesTodoId, {
+          text: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any)
+      }
     } else {
-      // Create a new To-Do in WLDD Core (or first project)
-      const newTodo = addItem({
-        type: 'todo',
-        text: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
-        completed: false,
-        priority: 'medium',
-        projectIds: [targetProject.id],
-        tags: ['pipeline'],
-        isStarred: false,
-      })
-      updateDeal(deal.id, { notesTodoId: newTodo.id })
+      // Create new item — Task for ScoopWhoop, To-Do for WLDD Core
+      let newLinkedItem
+      if (tabCfg.notesType === 'task') {
+        newLinkedItem = addItem({
+          type: 'task',
+          title: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
+          description: `Auto-created from ScoopWhoop pipeline notes`,
+          status: 'todo',
+          priority: 'medium',
+          progress: 0,
+          projectIds: [targetProject.id],
+          tags: ['pipeline', 'scoopwhoop'],
+          isStarred: false,
+        })
+      } else {
+        newLinkedItem = addItem({
+          type: 'todo',
+          text: `[${deal.clientName || 'Pipeline Client'}] ${notes}`,
+          completed: false,
+          priority: 'medium',
+          projectIds: [targetProject.id],
+          tags: ['pipeline'],
+          isStarred: false,
+        })
+      }
+      updateDeal(deal.id, { notesTodoId: newLinkedItem.id })
     }
   }
 
   const handleDeleteDeal = (deal: PipelineDeal) => {
-    // Also remove the linked followup item if it exists
-    if (deal.followUpItemId) {
-      deleteItem(deal.followUpItemId)
-    }
+    if (deal.followUpItemId) deleteItem(deal.followUpItemId)
     deleteDeal(deal.id)
     setConfirmDelete(null)
   }
 
-  const filtered = pipeline.filter(d => {
-    const q = search.toLowerCase()
-    const matchesSearch = !q || [d.clientName, d.internalPOC, d.clientPOC, d.notes].some(f => f.toLowerCase().includes(q))
-    const matchesStatus = filterStatus === 'all' || d.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
+  const handleAdd = () => addDeal({ status: 'cold', pipelineTab: activeTab })
+
+  const col = 'px-3 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider'
+
+  const accentAdd = activeTab === 'scoopwhoop'
+    ? 'bg-violet-600 hover:bg-violet-500 shadow-violet-900/30'
+    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30'
+
+  if (tabDeals.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center pb-24">
+        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${activeTab === 'scoopwhoop' ? 'from-violet-500/20 to-purple-600/20' : 'from-emerald-500/20 to-teal-600/20'} flex items-center justify-center mb-4`}>
+          <TrendingUp size={28} className={activeTab === 'scoopwhoop' ? 'text-violet-400' : 'text-emerald-400'} />
+        </div>
+        <p className="text-gray-300 font-semibold text-lg mb-1">No clients yet</p>
+        <p className="text-gray-600 text-sm mb-5">
+          {activeTab === 'scoopwhoop'
+            ? 'Add ScoopWhoop clients — notes auto-create Tasks in the ScoopWhoop project'
+            : 'Start tracking your sales pipeline by adding your first client'}
+        </p>
+        <button
+          onClick={handleAdd}
+          className={`flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-xl transition-colors shadow-lg ${accentAdd}`}
+        >
+          <Plus size={15} />
+          Add First Client
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <table className="w-full border-collapse">
+        <thead className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur">
+          <tr className="border-b border-white/10">
+            <th className={`${col} w-10`}>#</th>
+            <th className={`${col} min-w-[180px]`}>Client Name</th>
+            <th className={`${col} min-w-[140px]`}>Internal POC</th>
+            <th className={`${col} min-w-[140px]`}>Client POC</th>
+            <th className={`${col} min-w-[140px]`}>Status</th>
+            <th className={`${col} min-w-[120px]`}>Deal Value</th>
+            <th className={`${col} min-w-[160px]`}>
+              <div className="flex items-center gap-1.5">
+                <Bell size={11} />
+                Next Follow-up
+              </div>
+            </th>
+            <th className={`${col} flex-1`}>
+              Notes
+              {activeTab === 'scoopwhoop' && (
+                <span className="ml-1.5 text-[9px] text-violet-400 normal-case font-normal tracking-normal">→ auto Task</span>
+              )}
+              {activeTab === 'wldd' && (
+                <span className="ml-1.5 text-[9px] text-emerald-400 normal-case font-normal tracking-normal">→ auto To-Do</span>
+              )}
+            </th>
+            <th className={`${col} w-12`}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((deal: PipelineDeal, idx: number) => (
+            <tr
+              key={deal.id}
+              className="border-b border-white/5 hover:bg-white/[0.02] group transition-colors"
+            >
+              <td className="px-3 py-2 text-xs text-gray-600 text-center">{idx + 1}</td>
+
+              <td className="px-1 py-1">
+                <EditableCell
+                  value={deal.clientName}
+                  placeholder="Client name"
+                  onChange={v => updateDeal(deal.id, { clientName: v })}
+                  className="font-medium"
+                />
+              </td>
+
+              <td className="px-1 py-1">
+                <EditableCell
+                  value={deal.internalPOC}
+                  placeholder="Your team member"
+                  onChange={v => updateDeal(deal.id, { internalPOC: v })}
+                />
+              </td>
+
+              <td className="px-1 py-1">
+                <EditableCell
+                  value={deal.clientPOC}
+                  placeholder="Their contact"
+                  onChange={v => updateDeal(deal.id, { clientPOC: v })}
+                />
+              </td>
+
+              <td className="px-3 py-2">
+                <StatusBadge
+                  status={deal.status}
+                  onChange={s => updateDeal(deal.id, { status: s })}
+                />
+              </td>
+
+              <td className="px-1 py-1">
+                <EditableCell
+                  value={deal.value || ''}
+                  placeholder="e.g. $50k"
+                  onChange={v => updateDeal(deal.id, { value: v })}
+                />
+              </td>
+
+              <td className="py-1">
+                <FollowUpCell
+                  deal={deal}
+                  onDateChange={date => handleFollowUpDate(deal, date)}
+                />
+              </td>
+
+              <td className="px-1 py-1 max-w-[280px]">
+                <EditableCell
+                  value={deal.notes}
+                  placeholder={activeTab === 'scoopwhoop' ? 'Add notes → auto-creates a Task...' : 'Add notes → creates a To-Do...'}
+                  onChange={v => handleNotesChange(deal, v)}
+                  multiline
+                />
+                {deal.notesTodoId && (
+                  <p className={`px-2 pb-0.5 text-[10px] flex items-center gap-1 ${activeTab === 'scoopwhoop' ? 'text-violet-500/60' : 'text-emerald-500/60'}`}>
+                    <CheckCircle2 size={9} />
+                    {activeTab === 'scoopwhoop'
+                      ? `Task synced → ${targetProject?.name}`
+                      : `To-Do synced → ${targetProject?.name}`}
+                  </p>
+                )}
+              </td>
+
+              <td className="px-3 py-2">
+                {confirmDelete === deal.id ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleDeleteDeal(deal)}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="text-[10px] text-gray-500 hover:text-gray-300"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(deal.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <button
+        onClick={handleAdd}
+        className="flex items-center gap-2 w-full px-4 py-3 text-gray-600 hover:text-gray-400 hover:bg-white/3 transition-colors text-sm border-b border-white/5"
+      >
+        <Plus size={13} />
+        Add another client
+      </button>
+    </>
+  )
+}
+
+/* ─── Main Component ─────────────────────────────────────────── */
+
+export default function SalesPipeline() {
+  const { isPipelineOpen, setPipelineOpen, pipeline } = useStore()
+  const [activeTab, setActiveTab] = useState<PipelineTab>('wldd')
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<PipelineStatus | 'all'>('all')
+
+  if (!isPipelineOpen) return null
+
+  const tabDeals = pipeline.filter(d => (d.pipelineTab ?? 'wldd') === activeTab)
 
   const counts = PIPELINE_STATUSES.reduce<Record<string, number>>((acc, s) => {
-    acc[s.value] = pipeline.filter(d => d.status === s.value).length
+    acc[s.value] = tabDeals.filter(d => d.status === s.value).length
     return acc
   }, {})
 
-  const handleAdd = () => addDeal({ status: 'cold' })
+  const tabCfg = TAB_CONFIG.find(t => t.id === activeTab)!
 
-  const col = 'px-3 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider'
+  const accentAdd = activeTab === 'scoopwhoop'
+    ? 'bg-violet-600 hover:bg-violet-500 shadow-violet-900/30'
+    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30'
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex flex-col animate-fade-in">
@@ -304,14 +517,13 @@ export default function SalesPipeline() {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gray-900/80 backdrop-blur flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${tabCfg.color} flex items-center justify-center shadow-lg`}>
               <TrendingUp size={16} className="text-white" />
             </div>
             <div>
               <h2 className="text-white font-bold text-base">Sales Pipeline</h2>
               <p className="text-xs text-gray-500">
-                {pipeline.length} client{pipeline.length !== 1 ? 's' : ''}
-                {targetProject && <span className="ml-2 text-emerald-600">· Follow-ups sync to {targetProject.name}</span>}
+                {tabDeals.length} client{tabDeals.length !== 1 ? 's' : ''} in {tabCfg.label}
               </p>
             </div>
           </div>
@@ -339,8 +551,11 @@ export default function SalesPipeline() {
             </select>
 
             <button
-              onClick={handleAdd}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors shadow-lg shadow-emerald-900/30"
+              onClick={() => {
+                const { addDeal } = useStore.getState()
+                addDeal({ status: 'cold', pipelineTab: activeTab })
+              }}
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-white text-sm font-medium rounded-xl transition-colors shadow-lg ${accentAdd}`}
             >
               <Plus size={14} />
               Add Client
@@ -355,13 +570,51 @@ export default function SalesPipeline() {
           </div>
         </div>
 
+        {/* Tab Bar */}
+        <div className="flex items-end gap-0 px-6 pt-3 border-b border-white/10 bg-gray-900/60 flex-shrink-0">
+          {TAB_CONFIG.map(tab => {
+            const isActive = activeTab === tab.id
+            const tabCount = pipeline.filter(d => (d.pipelineTab ?? 'wldd') === tab.id).length
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setFilterStatus('all'); setSearch('') }}
+                className={`relative flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition-all rounded-t-xl mr-1
+                  ${isActive
+                    ? tab.id === 'scoopwhoop'
+                      ? 'bg-violet-500/10 text-violet-300 border border-b-0 border-violet-500/30'
+                      : 'bg-emerald-500/10 text-emerald-300 border border-b-0 border-emerald-500/30'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                  }`}
+              >
+                <span className={`w-2 h-2 rounded-full bg-gradient-to-br ${tab.color}`} />
+                {tab.label}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold
+                  ${isActive
+                    ? tab.id === 'scoopwhoop' ? 'bg-violet-500/20 text-violet-300' : 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-white/10 text-gray-500'
+                  }`}
+                >
+                  {tabCount}
+                </span>
+                {tab.id === 'scoopwhoop' && (
+                  <span className="text-[9px] text-violet-400/70 font-normal">Tasks</span>
+                )}
+                {isActive && (
+                  <span className={`absolute bottom-0 left-0 right-0 h-0.5 rounded-t ${tab.id === 'scoopwhoop' ? 'bg-violet-500' : 'bg-emerald-500'}`} />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Status summary pills */}
         <div className="flex items-center gap-2 px-6 py-3 border-b border-white/5 overflow-x-auto scrollbar-hide flex-shrink-0">
           <button
             onClick={() => setFilterStatus('all')}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap ${filterStatus === 'all' ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'}`}
           >
-            All <span className="bg-white/10 px-1.5 py-0.5 rounded-full">{pipeline.length}</span>
+            All <span className="bg-white/10 px-1.5 py-0.5 rounded-full">{tabDeals.length}</span>
           </button>
           {PIPELINE_STATUSES.filter(s => (counts[s.value] || 0) > 0).map(s => (
             <button
@@ -380,153 +633,13 @@ export default function SalesPipeline() {
           ))}
         </div>
 
-        {/* Table */}
+        {/* Table (per-tab) */}
         <div className="flex-1 overflow-auto">
-          {pipeline.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center pb-24">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-600/20 flex items-center justify-center mb-4">
-                <TrendingUp size={28} className="text-emerald-400" />
-              </div>
-              <p className="text-gray-300 font-semibold text-lg mb-1">No clients yet</p>
-              <p className="text-gray-600 text-sm mb-5">Start tracking your sales pipeline by adding your first client</p>
-              <button
-                onClick={handleAdd}
-                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors"
-              >
-                <Plus size={15} />
-                Add First Client
-              </button>
-            </div>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur">
-                <tr className="border-b border-white/10">
-                  <th className={`${col} w-10`}>#</th>
-                  <th className={`${col} min-w-[180px]`}>Client Name</th>
-                  <th className={`${col} min-w-[140px]`}>Internal POC</th>
-                  <th className={`${col} min-w-[140px]`}>Client POC</th>
-                  <th className={`${col} min-w-[140px]`}>Status</th>
-                  <th className={`${col} min-w-[120px]`}>Deal Value</th>
-                  <th className={`${col} min-w-[160px]`}>
-                    <div className="flex items-center gap-1.5">
-                      <Bell size={11} />
-                      Next Follow-up
-                    </div>
-                  </th>
-                  <th className={`${col} flex-1`}>Notes</th>
-                  <th className={`${col} w-12`}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((deal: PipelineDeal, idx: number) => (
-                  <tr
-                    key={deal.id}
-                    className="border-b border-white/5 hover:bg-white/[0.02] group transition-colors"
-                  >
-                    <td className="px-3 py-2 text-xs text-gray-600 text-center">{idx + 1}</td>
-
-                    <td className="px-1 py-1">
-                      <EditableCell
-                        value={deal.clientName}
-                        placeholder="Client name"
-                        onChange={v => updateDeal(deal.id, { clientName: v })}
-                        className="font-medium"
-                      />
-                    </td>
-
-                    <td className="px-1 py-1">
-                      <EditableCell
-                        value={deal.internalPOC}
-                        placeholder="Your team member"
-                        onChange={v => updateDeal(deal.id, { internalPOC: v })}
-                      />
-                    </td>
-
-                    <td className="px-1 py-1">
-                      <EditableCell
-                        value={deal.clientPOC}
-                        placeholder="Their contact"
-                        onChange={v => updateDeal(deal.id, { clientPOC: v })}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2">
-                      <StatusBadge
-                        status={deal.status}
-                        onChange={s => updateDeal(deal.id, { status: s })}
-                      />
-                    </td>
-
-                    <td className="px-1 py-1">
-                      <EditableCell
-                        value={deal.value || ''}
-                        placeholder="e.g. $50k"
-                        onChange={v => updateDeal(deal.id, { value: v })}
-                      />
-                    </td>
-
-                    {/* Follow-up Date */}
-                    <td className="py-1">
-                      <FollowUpCell
-                        deal={deal}
-                        onDateChange={date => handleFollowUpDate(deal, date)}
-                      />
-                    </td>
-
-                    <td className="px-1 py-1 max-w-[280px]">
-                      <EditableCell
-                        value={deal.notes}
-                        placeholder="Add notes → creates a To-Do..."
-                        onChange={v => handleNotesChange(deal, v)}
-                        multiline
-                      />
-                      {deal.notesTodoId && (
-                        <p className="px-2 pb-0.5 text-[10px] text-emerald-500/60 flex items-center gap-1">
-                          <CheckCircle2 size={9} /> Synced to To-Dos in {targetProject?.name}
-                        </p>
-                      )}
-                    </td>
-
-                    <td className="px-3 py-2">
-                      {confirmDelete === deal.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleDeleteDeal(deal)}
-                            className="text-[10px] text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(null)}
-                            className="text-[10px] text-gray-500 hover:text-gray-300"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmDelete(deal.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-600 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {pipeline.length > 0 && (
-            <button
-              onClick={handleAdd}
-              className="flex items-center gap-2 w-full px-4 py-3 text-gray-600 hover:text-gray-400 hover:bg-white/3 transition-colors text-sm border-b border-white/5"
-            >
-              <Plus size={13} />
-              Add another client
-            </button>
-          )}
+          <PipelineTable
+            activeTab={activeTab}
+            search={search}
+            filterStatus={filterStatus}
+          />
         </div>
 
       </div>

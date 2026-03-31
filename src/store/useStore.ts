@@ -334,6 +334,7 @@ export const useStore = create<StoreState>()(
           status: 'cold',
           notes: '',
           value: '',
+          pipelineTab: 'wldd',
           createdAt: now(),
           updatedAt: now(),
           ...deal,

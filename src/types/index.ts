@@ -140,6 +140,7 @@ export interface AppSettings {
 }
 
 export type PipelineStatus = 'cold' | 'pitched' | 'deck_shared' | 'pricing' | 'negotiating' | 'approved' | 'declined' | 'on_hold'
+export type PipelineTab = 'wldd' | 'scoopwhoop'
 
 export interface PipelineDeal {
   id: string
@@ -151,7 +152,8 @@ export interface PipelineDeal {
   value?: string
   nextFollowUpDate?: string   // ISO date string e.g. "2024-04-15"
   followUpItemId?: string     // ID of the linked FollowUpItem in the workspace
-  notesTodoId?: string        // ID of the linked TodoItem created from notes
+  notesTodoId?: string        // ID of the linked Task/TodoItem created from notes
+  pipelineTab: PipelineTab    // which tab this deal belongs to ('wldd' | 'scoopwhoop')
   createdAt: string
   updatedAt: string
 }
