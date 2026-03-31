@@ -237,25 +237,31 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Cloud sync requires Upstash Redis. In Vercel → your project → Storage → Connect Database → Upstash KV, then redeploy.
                 </p>
               )}
-              {/* Sync Now button */}
+              {/* Auto-sync notice + manual force-sync button */}
               {cloudSyncStatus !== 'unavailable' && (
-                <button
-                  onClick={async () => {
-                    setSyncing(true)
-                    const s = useStore.getState()
-                    const ok = await pushCloud({
-                      projects: s.projects, items: s.items, pipeline: s.pipeline,
-                      briefings: s.briefings, activeProjectId: s.activeProjectId,
-                      activeSection: s.activeSection, syncedAt: new Date().toISOString(),
-                    }).catch(() => false)
-                    s.setCloudSyncStatus(ok ? 'synced' : 'error', ok ? new Date().toISOString() : undefined)
-                    setSyncing(false)
-                  }}
-                  disabled={syncing}
-                  className="w-full py-2 text-xs font-medium rounded-xl border border-indigo-500/30 bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 transition-colors disabled:opacity-50"
-                >
-                  {syncing ? 'Syncing…' : '↑ Push My Data to Cloud'}
-                </button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-xl">
+                    <span className="text-green-400 text-xs">⚡</span>
+                    <p className="text-xs text-green-300/80">Auto-sync is active — every change saves to cloud within 3 seconds</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setSyncing(true)
+                      const s = useStore.getState()
+                      const ok = await pushCloud({
+                        projects: s.projects, items: s.items, pipeline: s.pipeline,
+                        briefings: s.briefings, activeProjectId: s.activeProjectId,
+                        activeSection: s.activeSection, syncedAt: new Date().toISOString(),
+                      }).catch(() => false)
+                      s.setCloudSyncStatus(ok ? 'synced' : 'error', ok ? new Date().toISOString() : undefined)
+                      setSyncing(false)
+                    }}
+                    disabled={syncing}
+                    className="w-full py-2 text-xs font-medium rounded-xl border border-indigo-500/30 bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 transition-colors disabled:opacity-50"
+                  >
+                    {syncing ? 'Syncing…' : '↑ Force Sync Now'}
+                  </button>
+                </div>
               )}
               {/* Export / Import */}
               <div className="flex gap-2">
@@ -287,7 +293,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 <p className="text-xs text-red-400">{importError}</p>
               )}
               <p className="text-xs text-gray-600">
-                Use "Push My Data to Cloud" to sync to other devices. Export saves a local backup.
+                Data auto-syncs to cloud 3 s after every change. Export saves a local backup file.
               </p>
             </div>
           </div>
